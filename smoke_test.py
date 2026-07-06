@@ -226,6 +226,63 @@ win.cmb_axis_side.setCurrentIndex(right_idx)
 win.reset_style_for_selected_series()
 check("reset returns combo to auto", win._current_axis_side() == "auto")
 
+# ------------------------------------------------------------------
+# 6. Axis renaming (overrides on pane + MainWindow sync)
+# ------------------------------------------------------------------
+def axis_label_text(p, axis):
+    return str(p.plot.getPlotItem().getAxis(axis).labelText or "")
+
+# pane-level override survives replot and applies to labels
+pane.set_axis_label_override("left", "Basınç (bar)")
+pane.set_axis_label_override("bottom", "Süre")
+pane.plot_series(small_series, "numeric", "Zaman (s)", style_map={})
+check("left axis override applied", axis_label_text(pane, "left") == "Basınç (bar)",
+      axis_label_text(pane, "left"))
+check("bottom axis override applied", axis_label_text(pane, "bottom") == "Süre",
+      axis_label_text(pane, "bottom"))
+
+# right override applies while a right axis exists (digital1 -> auto Y2)
+pane.set_axis_label_override("right", "Vana Durumu")
+check("right axis override applied", axis_label_text(pane, "right") == "Vana Durumu",
+      axis_label_text(pane, "right"))
+
+# clearing returns to automatic label
+pane.set_axis_label_override("left", "")
+check("left axis reset to auto", axis_label_text(pane, "left") != "Basınç (bar)",
+      axis_label_text(pane, "left"))
+check("effective label reported", pane.effective_axis_label("bottom") == "Süre")
+
+# axis hit-test finds axes at their scene positions
+pane.resize(800, 600)
+pane.show()
+qapp.processEvents()
+p1 = pane.plot.getPlotItem()
+left_ax = p1.getAxis("left")
+bottom_ax = p1.getAxis("bottom")
+left_center = left_ax.mapRectToScene(left_ax.rect()).center()
+bottom_center = bottom_ax.mapRectToScene(bottom_ax.rect()).center()
+check("hit-test left axis", pane._axis_at_scene_pos(left_center) == "left",
+      str(pane._axis_at_scene_pos(left_center)))
+check("hit-test bottom axis", pane._axis_at_scene_pos(bottom_center) == "bottom",
+      str(pane._axis_at_scene_pos(bottom_center)))
+vb_center = pane.plot.getViewBox().sceneBoundingRect().center()
+check("hit-test plot area is not an axis", pane._axis_at_scene_pos(vb_center) is None)
+
+# MainWindow: double-click rename signal path syncs fields + panes
+win._on_axis_label_edited("left", "Tork (Nm)")
+check("mainwindow stores override", win.axis_label_overrides.get("left") == "Tork (Nm)")
+check("field synced", win.ed_axis_y1.text() == "Tork (Nm)")
+check("main pane label synced",
+      str(win.plot_pane.plot.getPlotItem().getAxis("left").labelText or "") == "Tork (Nm)")
+
+# 'Eksenler' tab apply/reset
+win.ed_axis_x.setText("Deney Süresi (s)")
+win._apply_axis_labels_from_fields()
+check("controls-tab apply works", win.axis_label_overrides.get("bottom") == "Deney Süresi (s)")
+win._reset_axis_labels()
+check("controls-tab reset clears overrides", win.axis_label_overrides == {})
+check("fields cleared after reset", win.ed_axis_x.text() == "" and win.ed_axis_y1.text() == "")
+
 win.close()
 
 print()

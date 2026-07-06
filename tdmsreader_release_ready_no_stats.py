@@ -19,6 +19,8 @@ Orijinal sürüme göre yapılan iyileştirmeler:
 - Excel benzeri ikincil eksen: herhangi bir kanal Stil sekmesinden Y2'ye atanabilir
   (dijital sinyaller varsayılan olarak otomatik Y2'ye gitmeye devam eder)
 - CSV dışa aktarmada toplu satır yazımı
+- Eksen adlarını değiştirme: eksene çift tıklayarak veya Kontroller > Eksenler
+  sekmesinden özel ad verilebilir (boş bırakılırsa otomatik ada döner)
 """
 
 from __future__ import annotations
@@ -64,7 +66,7 @@ from PyQt6.QtWidgets import (
     QTreeWidgetItem, QSplitter, QMessageBox, QStatusBar, QCheckBox, QGroupBox,
     QFormLayout, QDoubleSpinBox, QTabWidget, QComboBox, QButtonGroup, QSpinBox,
     QColorDialog, QGridLayout, QSizePolicy, QToolButton, QFrame,
-    QProgressBar, QMenu, QMenuBar, QDialog, QTextBrowser,
+    QProgressBar, QMenu, QMenuBar, QDialog, QTextBrowser, QInputDialog,
 )
 
 # ---------------------------------------------------------------------------
@@ -1164,6 +1166,8 @@ class PlotPane(QWidget):
     y_lock_toggled = pyqtSignal(bool)
     right_y_lock_toggled = pyqtSignal(bool)
     autofit_requested = pyqtSignal()
+    # (axis, new_label) — axis in ("bottom", "left", "right"); "" resets to auto
+    axis_label_edited = pyqtSignal(str, str)
 
     def __init__(
         self, parent: Optional[QWidget] = None,
@@ -1214,6 +1218,10 @@ class PlotPane(QWidget):
 
         self._crosshair_v: Optional[pg.InfiniteLine] = None
         self._crosshair_h: Optional[pg.InfiniteLine] = None
+
+        # User-defined axis label overrides ("" / missing = automatic)
+        self._axis_label_overrides: Dict[str, str] = {}
+        self._last_auto_labels: Tuple[str, str, Optional[str]] = ("X", "Değer", None)
 
         self._info = QLabel("İmleç: —")
         self._info.setObjectName("cursorInfo")
@@ -1640,8 +1648,8 @@ class PlotPane(QWidget):
         vb.sigXRangeChanged.connect(self._on_xrange_changed)
         vb.sigYRangeChanged.connect(self._on_left_yrange_changed)
 
-        self.plot.setLabel("bottom", x_label)
-        self.plot.setLabel("left", "Değer")
+        self.plot.setLabel("bottom", self._axis_label_overrides.get("bottom") or x_label)
+        self.plot.setLabel("left", self._axis_label_overrides.get("left") or "Değer")
 
         self._layout.addWidget(self.plot, stretch=1)
         self._apply_theme()
@@ -1733,18 +1741,92 @@ class PlotPane(QWidget):
         self, x_label: str, y_left: str,
         y_right: Optional[str] = None,
     ) -> None:
-        pi = self.plot.getPlotItem()
-        self.plot.setLabel("bottom", x_label)
-        self.plot.setLabel("left", y_left or "Değer")
+        self._last_auto_labels = (x_label, y_left, y_right)
 
-        parts = [f"<b>X:</b> {x_label}", f"<b>Y:</b> {y_left or '—'}"]
-        if y_right:
+        ov = self._axis_label_overrides
+        x_eff = ov.get("bottom") or x_label
+        y_left_eff = ov.get("left") or (y_left or "Değer")
+        # Right override only applies while a right axis is actually shown
+        y_right_eff = (ov.get("right") or y_right) if y_right else None
+
+        pi = self.plot.getPlotItem()
+        self.plot.setLabel("bottom", x_eff)
+        self.plot.setLabel("left", y_left_eff)
+
+        parts = [f"<b>X:</b> {x_eff}", f"<b>Y:</b> {y_left_eff or '—'}"]
+        if y_right_eff:
             try:
-                self.plot.setLabel("right", y_right)
+                self.plot.setLabel("right", y_right_eff)
             except Exception:
                 pass
-            parts.append(f"<b>Y2:</b> {y_right}")
+            parts.append(f"<b>Y2:</b> {y_right_eff}")
         pi.setTitle(" &nbsp;&nbsp; | &nbsp;&nbsp; ".join(parts))
+
+    # ----- Axis label overrides (user renaming) -----
+
+    def axis_label_override(self, axis: str) -> str:
+        return self._axis_label_overrides.get(axis, "")
+
+    def effective_axis_label(self, axis: str) -> str:
+        """Current label shown on the given axis (override or automatic)."""
+        auto_map = {
+            "bottom": self._last_auto_labels[0],
+            "left": self._last_auto_labels[1],
+            "right": self._last_auto_labels[2] or "",
+        }
+        return self._axis_label_overrides.get(axis) or (auto_map.get(axis) or "")
+
+    def set_axis_label_override(self, axis: str, text: str) -> None:
+        """Set (or clear, with empty text) a user-defined axis label."""
+        if axis not in ("bottom", "left", "right"):
+            return
+        text = (text or "").strip()
+        if text:
+            self._axis_label_overrides[axis] = text
+        else:
+            self._axis_label_overrides.pop(axis, None)
+        if self.plot is not None:
+            self._set_axis_titles(*self._last_auto_labels)
+
+    def _axis_at_scene_pos(self, pos: Any) -> Optional[str]:
+        """Return the axis name under the given scene position, if any.
+
+        Uses the axis strip itself (mapRectToScene of the item's rect);
+        sceneBoundingRect() would also include grid lines that span the
+        whole plot area and produce false positives.
+        """
+        if self.plot is None:
+            return None
+        p1 = self.plot.getPlotItem()
+        for name in ("left", "right", "bottom"):
+            if name == "right" and self._right_vb is None:
+                continue
+            try:
+                ax = p1.getAxis(name)
+                if ax is None or not ax.isVisible():
+                    continue
+                if ax.mapRectToScene(ax.rect()).contains(pos):
+                    return name
+            except Exception:
+                continue
+        return None
+
+    def _prompt_axis_rename(self, axis: str) -> None:
+        names_tr = {
+            "bottom": "X Ekseni",
+            "left": "Y1 (Sol Eksen)",
+            "right": "Y2 (Sağ Eksen)",
+        }
+        current = self._axis_label_overrides.get(axis) or self.effective_axis_label(axis)
+        text, ok = QInputDialog.getText(
+            self, "Eksen Adını Değiştir",
+            f"{names_tr.get(axis, axis)} için yeni ad (boş bırakılırsa otomatik ada döner):",
+            text=current,
+        )
+        if not ok:
+            return
+        self.set_axis_label_override(axis, text)
+        self.axis_label_edited.emit(axis, (text or "").strip())
 
     # ----- Digital step rendering -----
 
@@ -2285,11 +2367,29 @@ class PlotPane(QWidget):
             self._info.setText(f"X={mp.x():.6g} | Y: {val_txt}")
 
     def _on_mouse_clicked(self, event: Any) -> None:
-        if self.plot is None or not self._click_mark_enabled:
+        if self.plot is None:
             return
         if event.button() != Qt.MouseButton.LeftButton:
             return
         pos = event.scenePos()
+
+        # Double-click on an axis -> rename that axis
+        try:
+            is_double = bool(event.double())
+        except Exception:
+            is_double = False
+        if is_double:
+            axis = self._axis_at_scene_pos(pos)
+            if axis:
+                try:
+                    event.accept()
+                except Exception:
+                    pass
+                self._prompt_axis_rename(axis)
+                return
+
+        if not self._click_mark_enabled:
+            return
         vb = self.plot.getViewBox()
         if vb.sceneBoundingRect().contains(pos):
             mp = vb.mapSceneToView(pos)
@@ -2462,6 +2562,7 @@ class MainWindow(QMainWindow):
         self.current_series: Optional[List[dict]] = None
 
         self.style_map: Dict[str, dict] = {}
+        self.axis_label_overrides: Dict[str, str] = {}
         self._jobs: List[Tuple[QThread, CancellableWorker, str]] = []
 
         self.plot_bg_rgb: Tuple[int, int, int] = self._theme_default_bg[self._theme]
@@ -2758,6 +2859,7 @@ class MainWindow(QMainWindow):
             "<tr><td>Sol Fare Sürükleme</td><td>Kaydır / Yakınlaştır (moda göre)</td></tr>"
             "<tr><td>Fare Tekerleği</td><td>Yakınlaştır / Uzaklaştır</td></tr>"
             "<tr><td>Sağ Tık Sürükle</td><td>Eksenleri ölçekle</td></tr>"
+            "<tr><td>Eksene Çift Tık</td><td>Eksen adını değiştir (boş = otomatik)</td></tr>"
             "<tr><td>Sürükle & Bırak</td><td>TDMS dosyasını sürükleyip bırakarak aç</td></tr>"
             "</table>"
         )
@@ -3101,6 +3203,43 @@ class MainWindow(QMainWindow):
         sg.addLayout(shift_btn_row, 5, 0, 1, 6)
         self.ctrl_tabs.addTab(tab_style, "Stil")
 
+        # Tab: Axis names
+        tab_axes = QWidget()
+        ag = QGridLayout(tab_axes)
+        ag.setContentsMargins(6, 6, 6, 6)
+        ag.setHorizontalSpacing(10)
+        ag.setVerticalSpacing(8)
+
+        self.ed_axis_x = QLineEdit()
+        self.ed_axis_y1 = QLineEdit()
+        self.ed_axis_y2 = QLineEdit()
+        for ed in (self.ed_axis_x, self.ed_axis_y1, self.ed_axis_y2):
+            ed.setPlaceholderText("(otomatik)")
+        self.ed_axis_x.setToolTip("X ekseni için özel ad. Boş bırakılırsa otomatik ad kullanılır.")
+        self.ed_axis_y1.setToolTip("Sol (Y1) eksen için özel ad. Boş bırakılırsa otomatik ad kullanılır.")
+        self.ed_axis_y2.setToolTip("Sağ (Y2) eksen için özel ad. Boş bırakılırsa otomatik ad kullanılır.")
+
+        self.btn_axis_apply = QPushButton("Uygula")
+        self.btn_axis_reset = QPushButton("Sıfırla")
+        self.btn_axis_reset.setToolTip("Tüm eksen adlarını otomatik değerlere döndür")
+
+        lbl_axis_hint = QLabel("İpucu: Grafik üzerinde eksen alanına çift tıklayarak da ad değiştirebilirsiniz.")
+        lbl_axis_hint.setWordWrap(True)
+
+        ag.addWidget(QLabel("X Ekseni:"), 0, 0)
+        ag.addWidget(self.ed_axis_x, 0, 1)
+        ag.addWidget(QLabel("Y1 (Sol):"), 0, 2)
+        ag.addWidget(self.ed_axis_y1, 0, 3)
+        ag.addWidget(QLabel("Y2 (Sağ):"), 0, 4)
+        ag.addWidget(self.ed_axis_y2, 0, 5)
+        ag.addWidget(self.btn_axis_apply, 0, 6)
+        ag.addWidget(self.btn_axis_reset, 0, 7)
+        ag.addWidget(lbl_axis_hint, 1, 0, 1, 8)
+        ag.setColumnStretch(1, 1)
+        ag.setColumnStretch(3, 1)
+        ag.setColumnStretch(5, 1)
+        self.ctrl_tabs.addTab(tab_axes, "Eksenler")
+
         plot_vsplit = QSplitter(Qt.Orientation.Vertical)
         plot_vsplit.setHandleWidth(8)
         plot_vsplit.addWidget(self.plot_pane)
@@ -3249,6 +3388,12 @@ class MainWindow(QMainWindow):
         self.plot_pane.right_y_lock_toggled.connect(self._on_pane_y2lock)
         self.plot_pane.region_toggled.connect(self._on_pane_region)
         self.plot_pane.click_mark_toggled.connect(self._on_pane_click_mark)
+        self.plot_pane.axis_label_edited.connect(self._on_axis_label_edited)
+
+        self.btn_axis_apply.clicked.connect(self._apply_axis_labels_from_fields)
+        self.btn_axis_reset.clicked.connect(self._reset_axis_labels)
+        for ed in (self.ed_axis_x, self.ed_axis_y1, self.ed_axis_y2):
+            ed.returnPressed.connect(self._apply_axis_labels_from_fields)
 
         self.btn_clear_markers.clicked.connect(self.clear_markers)
         self.plot_pane.marker_requested.connect(lambda x, y: self._on_marker_requested_from("main", x, y))
@@ -3434,6 +3579,54 @@ class MainWindow(QMainWindow):
         if self.detached_win is not None:
             self.detached_win.pane.set_legend_visible(enabled)
 
+    # ----- Axis label overrides -----
+
+    def _axis_field_map(self) -> List[Tuple[str, QLineEdit]]:
+        return [
+            ("bottom", self.ed_axis_x),
+            ("left", self.ed_axis_y1),
+            ("right", self.ed_axis_y2),
+        ]
+
+    def _sync_axis_fields(self) -> None:
+        """Reflect current overrides into the 'Eksenler' tab line edits."""
+        for axis, ed in self._axis_field_map():
+            blocked = ed.blockSignals(True)
+            try:
+                ed.setText(self.axis_label_overrides.get(axis, ""))
+            finally:
+                ed.blockSignals(blocked)
+
+    def _set_axis_label_override_all(self, axis: str, text: str) -> None:
+        text = (text or "").strip()
+        if text:
+            self.axis_label_overrides[axis] = text
+        else:
+            self.axis_label_overrides.pop(axis, None)
+        self.plot_pane.set_axis_label_override(axis, text)
+        if self.detached_win is not None:
+            self.detached_win.pane.set_axis_label_override(axis, text)
+
+    def _on_axis_label_edited(self, axis: str, text: str) -> None:
+        """A pane's double-click rename happened; propagate everywhere."""
+        self._set_axis_label_override_all(axis, text)
+        self._sync_axis_fields()
+        if text:
+            self.status.showMessage(f"Eksen adı güncellendi: {text}", 2500)
+        else:
+            self.status.showMessage("Eksen adı otomatiğe döndürüldü.", 2500)
+
+    def _apply_axis_labels_from_fields(self) -> None:
+        for axis, ed in self._axis_field_map():
+            self._set_axis_label_override_all(axis, ed.text())
+        self.status.showMessage("Eksen adları uygulandı.", 2500)
+
+    def _reset_axis_labels(self) -> None:
+        for axis, _ed in self._axis_field_map():
+            self._set_axis_label_override_all(axis, "")
+        self._sync_axis_fields()
+        self.status.showMessage("Eksen adları otomatiğe döndürüldü.", 2500)
+
     # ----- Background -----
 
     def _set_bg_button_preview(self, rgb: Tuple[int, int, int]) -> None:
@@ -3489,8 +3682,12 @@ class MainWindow(QMainWindow):
             ]:
                 getattr(self.detached_win.pane, sig_name).connect(handler)
 
+            self.detached_win.pane.axis_label_edited.connect(self._on_axis_label_edited)
+
             dp = self.detached_win.pane
             mp = self.plot_pane
+            for axis, text in self.axis_label_overrides.items():
+                dp.set_axis_label_override(axis, text)
             dp.set_interaction_mode(mp._interaction_mode)
             dp.enable_region(mp._region_enabled)
             dp.set_click_mark_mode(mp._click_mark_enabled)
