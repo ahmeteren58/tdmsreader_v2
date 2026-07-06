@@ -15,6 +15,10 @@ Orijinal sürüme göre yapılan iyileştirmeler:
 - Genel metotlarda uygun docstring'ler
 - Çok büyük kanallar için düzeltilmiş dijital adım çizimi
 - Uzun işlemler sırasında daha iyi ilerleme geri bildirimi
+- Tembel (lazy) okuma için parça bazlı adımlı okuma (örnek başına okuma yok)
+- Excel benzeri ikincil eksen: herhangi bir kanal Stil sekmesinden Y2'ye atanabilir
+  (dijital sinyaller varsayılan olarak otomatik Y2'ye gitmeye devam eder)
+- CSV dışa aktarmada toplu satır yazımı
 """
 
 from __future__ import annotations
@@ -366,6 +370,49 @@ def _stride_for_window(i0: int, i1: int, max_points: int) -> int:
     if max_points <= 0:
         return 1
     return max(1, math.ceil(win / max_points))
+
+
+def _read_channel_strided(
+    ch: Any, i0: int, i1: int, stride: int,
+    chunk_samples: int = 2_000_000,
+) -> np.ndarray:
+    """Read ``ch[i0:i1:stride]`` efficiently.
+
+    nptdms channels opened with ``TdmsFile.open()`` do not support strided
+    slicing, so falling back to per-element reads would trigger one file read
+    per sample. Instead, read contiguous chunks and apply the stride in numpy.
+    """
+    i0 = max(0, int(i0))
+    i1 = max(i0, int(i1))
+    stride = max(1, int(stride))
+    if i1 <= i0:
+        return np.asarray([], dtype=np.float64)
+
+    if stride == 1:
+        return np.asarray(ch[i0:i1])
+
+    try:
+        return np.asarray(ch[i0:i1:stride])
+    except Exception:
+        pass
+
+    parts: List[np.ndarray] = []
+    # Align chunk size to the stride so chunk boundaries stay on-grid.
+    chunk = max(stride, (chunk_samples // stride) * stride)
+    pos = i0
+    while pos < i1:
+        end = min(i1, pos + chunk)
+        block = np.asarray(ch[pos:end])
+        offset = (-(pos - i0)) % stride
+        if offset < block.shape[0]:
+            parts.append(block[offset::stride])
+        pos = end
+
+    if not parts:
+        return np.asarray([], dtype=np.float64)
+    if len(parts) == 1:
+        return parts[0]
+    return np.concatenate(parts)
 
 
 def classify_and_extract_x(
@@ -807,13 +854,7 @@ class MultiTdmsChannelLoadWorker(CancellableWorker):
         x_mode, x_base, x_inc = _xmeta_from_channel_props(props)
         stride = _stride_for_window(0, n, CFG.lazy.overview_max_points)
 
-        try:
-            y = ch[0:n:stride]
-        except Exception:
-            indices = list(range(0, n, stride))
-            y = np.asarray([ch[i] for i in indices])
-
-        y = _ensure_1d_numeric(y)
+        y = _ensure_1d_numeric(_read_channel_strided(ch, 0, n, stride))
         if y.size == 0:
             return None
 
@@ -963,13 +1004,7 @@ class LazyViewLoadWorker(CancellableWorker):
                             i0, i1 = _slice_indices_from_xrange(x0, x1, n, x_mode, x_base, x_inc)
                             stride = _stride_for_window(i0, i1, self.max_points)
 
-                            try:
-                                y = ch[i0:i1:stride]
-                            except Exception:
-                                indices = list(range(i0, i1, stride))
-                                y = np.asarray([ch[i] for i in indices])
-
-                            y = _ensure_1d_numeric(y)
+                            y = _ensure_1d_numeric(_read_channel_strided(ch, i0, i1, stride))
                             idx = np.arange(i0, i1, stride, dtype=np.float64)
                             x = idx if x_mode == "index" else (x_base + idx * x_inc).astype(np.float64)
 
@@ -1781,7 +1816,13 @@ class PlotPane(QWidget):
         self, series_list: List[dict], axis_mode: str,
         x_label: str, style_map: Optional[Dict[str, dict]] = None,
     ) -> None:
-        """Plot all series, routing analog to left axis and digital to right."""
+        """Plot all series, routing each one to the left or right Y axis.
+
+        Default ('auto') routing sends digital signals to the right axis and
+        analog signals to the left axis. A per-channel style entry
+        ``style_map[key]['axis']`` of 'left' or 'right' overrides this,
+        allowing any channel to be placed on the secondary axis (Excel-style).
+        """
         if axis_mode != self.axis_mode:
             self.build_plot(axis_mode=axis_mode, x_label=x_label)
         else:
@@ -1805,14 +1846,38 @@ class PlotPane(QWidget):
         except Exception:
             pass
 
-        analog = [s for s in series_list if not s.get("is_digital")]
-        digital = [s for s in series_list if s.get("is_digital")]
+        smap0 = style_map or {}
 
-        y_left = self._compute_y_label(analog) if analog else (self._compute_y_label(series_list) or "Değer")
+        def _axis_side(s: dict) -> str:
+            """Resolve the target Y axis for a series.
 
-        if digital:
+            'auto' keeps the historical behaviour (digital -> right axis);
+            'left'/'right' are explicit user assignments (Excel-style).
+            """
+            st = smap0.get(s.get("style_key", ""), {})
+            side = str(st.get("axis", "auto") or "auto").strip().lower()
+            if side in ("left", "right"):
+                return side
+            return "right" if s.get("is_digital") else "left"
+
+        left_series = [s for s in series_list if _axis_side(s) == "left"]
+        right_series = [s for s in series_list if _axis_side(s) == "right"]
+
+        left_analog = [s for s in left_series if not s.get("is_digital")]
+        right_analog = [s for s in right_series if not s.get("is_digital")]
+
+        y_left = (
+            self._compute_y_label(left_analog) if left_analog
+            else (self._compute_y_label(left_series) or "Değer")
+        )
+
+        if right_series:
             self._ensure_right_axis()
-            self._set_axis_titles(x_label, y_left, "Dijital")
+            if right_analog:
+                y_right = self._compute_y_label(right_series) or "Y2"
+            else:
+                y_right = "Dijital"
+            self._set_axis_titles(x_label, y_left, y_right)
         else:
             self._destroy_right_axis()
             self._set_axis_titles(x_label, y_left, None)
@@ -1823,7 +1888,10 @@ class PlotPane(QWidget):
         right_mins: List[float] = []
         right_maxs: List[float] = []
 
-        def _make_label(s: dict, is_dig: bool = False, x_shift: float = 0.0, y_shift: float = 0.0) -> str:
+        def _make_label(
+            s: dict, is_dig: bool = False, on_right: bool = False,
+            x_shift: float = 0.0, y_shift: float = 0.0,
+        ) -> str:
             parts = []
             fl = (s.get("file_label") or "").strip()
             nm = (s.get("name") or "").strip()
@@ -1839,6 +1907,8 @@ class PlotPane(QWidget):
                 parts[0] += f" {tag}"
             if is_dig:
                 parts[0] += " [DİJ]"
+            if on_right:
+                parts[0] += " [Y2]"
             if x_shift != 0.0:
                 parts[0] += f" (x{x_shift:+g})"
             if y_shift != 0.0:
@@ -1853,18 +1923,32 @@ class PlotPane(QWidget):
             ys = float(st.get("y_shift", 0.0) or 0.0)
             return color, width, xs if math.isfinite(xs) else 0.0, ys if math.isfinite(ys) else 0.0
 
-        # Analog
-        for s in analog:
-            skey = s.get("style_key", "")
-            color, width, x_shift, y_shift = _get_style(skey)
-            x_raw = s["x"]
-            x = (np.asarray(x_raw, dtype=np.float64) + x_shift) if x_shift else x_raw
-            y_raw = s["y"]
-            y = (np.asarray(y_raw, dtype=np.float64) + y_shift) if y_shift else y_raw
-            label = _make_label(s, x_shift=x_shift, y_shift=y_shift)
+        def _track_right_bounds(s: dict, y: np.ndarray, y_shift: float) -> None:
+            """Accumulate min/max of a right-axis series for range clamping."""
+            levels = s.get("digital_levels")
+            if isinstance(levels, (tuple, list)) and len(levels) == 2:
+                try:
+                    lo, hi = float(levels[0]) + y_shift, float(levels[1]) + y_shift
+                    if math.isfinite(lo) and math.isfinite(hi):
+                        if hi < lo:
+                            lo, hi = hi, lo
+                        right_mins.append(lo)
+                        right_maxs.append(hi)
+                        return
+                except Exception:
+                    pass
+            try:
+                yf = np.asarray(y, dtype=np.float64)
+                if yf.size:
+                    samp = yf[::max(1, yf.size // 50000)]
+                    samp = samp[np.isfinite(samp)]
+                    if samp.size:
+                        right_mins.append(float(samp.min()))
+                        right_maxs.append(float(samp.max()))
+            except Exception:
+                pass
 
-            pen_color = color if color is not None else pg.intColor(i_global, hues=max(1, n_total))
-            pen = pg.mkPen(pen_color, width=width)
+        def _make_line_item(x: np.ndarray, y: np.ndarray, pen: Any) -> pg.PlotDataItem:
             item = pg.PlotDataItem(pen=pen)
             try:
                 item.setData(x, y, skipFiniteCheck=True)
@@ -1875,7 +1959,29 @@ class PlotPane(QWidget):
                 item.setClipToView(True)
             except Exception:
                 pass
-            self.plot.addItem(item)
+            return item
+
+        # Left axis series (analog lines; digital forced to left drawn as steps)
+        for s in left_series:
+            skey = s.get("style_key", "")
+            color, width, x_shift, y_shift = _get_style(skey)
+            is_dig = bool(s.get("is_digital"))
+            x_raw = s["x"]
+            x = (np.asarray(x_raw, dtype=np.float64) + x_shift) if x_shift else x_raw
+            y_raw = s["y"]
+            y = (np.asarray(y_raw, dtype=np.float64) + y_shift) if y_shift else y_raw
+            label = _make_label(s, is_dig=is_dig, x_shift=x_shift, y_shift=y_shift)
+
+            pen_color = color if color is not None else pg.intColor(i_global, hues=max(1, n_total))
+            pen = pg.mkPen(pen_color, width=width)
+            if is_dig:
+                item = self._plot_digital_step(x, y, pen, viewbox=None)
+                if item is None:
+                    i_global += 1
+                    continue
+            else:
+                item = _make_line_item(x, y, pen)
+                self.plot.addItem(item)
             self._left_items.append(item)
             if self.legend is not None:
                 try:
@@ -1884,8 +1990,8 @@ class PlotPane(QWidget):
                     pass
             i_global += 1
 
-        # Digital
-        for s in digital:
+        # Right axis series (digital steps + user-assigned analog lines)
+        for s in right_series:
             if self._right_vb is None:
                 self._ensure_right_axis()
             if self._right_vb is None:
@@ -1893,38 +1999,22 @@ class PlotPane(QWidget):
 
             skey = s.get("style_key", "")
             color, width, x_shift, y_shift = _get_style(skey)
+            is_dig = bool(s.get("is_digital"))
             x_raw = s["x"]
             x = (np.asarray(x_raw, dtype=np.float64) + x_shift) if x_shift else x_raw
             y_raw = s["y"]
             y = (np.asarray(y_raw, dtype=np.float64) + y_shift) if y_shift else y_raw
 
-            levels = s.get("digital_levels")
-            if isinstance(levels, (tuple, list)) and len(levels) == 2:
-                try:
-                    lo, hi = float(levels[0]), float(levels[1])
-                    if math.isfinite(lo) and math.isfinite(hi):
-                        if hi < lo:
-                            lo, hi = hi, lo
-                        right_mins.append(lo)
-                        right_maxs.append(hi)
-                except Exception:
-                    pass
-            else:
-                try:
-                    yf = np.asarray(y, dtype=np.float64)
-                    if yf.size:
-                        samp = yf[::max(1, yf.size // 50000)]
-                        samp = samp[np.isfinite(samp)]
-                        if samp.size:
-                            right_mins.append(float(samp.min()))
-                            right_maxs.append(float(samp.max()))
-                except Exception:
-                    pass
+            _track_right_bounds(s, y, y_shift)
 
-            label = _make_label(s, is_dig=True, x_shift=x_shift, y_shift=y_shift)
+            label = _make_label(s, is_dig=is_dig, on_right=not is_dig, x_shift=x_shift, y_shift=y_shift)
             pen_color = color if color is not None else pg.intColor(i_global, hues=max(1, n_total))
             pen = pg.mkPen(pen_color, width=width)
-            item = self._plot_digital_step(x, y, pen, viewbox=self._right_vb)
+            if is_dig:
+                item = self._plot_digital_step(x, y, pen, viewbox=self._right_vb)
+            else:
+                item = _make_line_item(x, y, pen)
+                self._right_vb.addItem(item)
             if item is None:
                 i_global += 1
                 continue
@@ -1945,6 +2035,24 @@ class PlotPane(QWidget):
             vb.autoRange()
         except Exception:
             self.plot.enableAutoRange()
+
+        # If everything is on the right axis, the left viewbox is empty and
+        # autoRange leaves X unset; derive the X range from right-axis data.
+        if not self._left_items and self._right_items:
+            try:
+                xmins: List[float] = []
+                xmaxs: List[float] = []
+                for it in self._right_items:
+                    xd, _yd = it.getData()
+                    if xd is not None and len(xd):
+                        xmins.append(float(np.nanmin(xd)))
+                        xmaxs.append(float(np.nanmax(xd)))
+                if xmins and xmaxs:
+                    x0b, x1b = min(xmins), max(xmaxs)
+                    if math.isfinite(x0b) and math.isfinite(x1b) and x1b > x0b:
+                        vb.setXRange(x0b, x1b, padding=0.02)
+            except Exception:
+                pass
 
         if self._right_vb is not None:
             if self._right_y_lock_enabled:
@@ -2268,7 +2376,7 @@ class PlotPane(QWidget):
         self._qb_legend = self._mk_qb_btn("legend_menu.png", "Gösterge", checkable=True)
         self._qb_marker = self._mk_qb_btn("marker_pin.png", "Tıkla İşaretle", checkable=True)
         self._qb_ylock = self._mk_qb_btn("y_lock.png", "Y Kilidi", checkable=True)
-        self._qb_y2lock = self._mk_qb_btn("y2_lock.png", "Y2 (Dijital) Kilidi", checkable=True)
+        self._qb_y2lock = self._mk_qb_btn("y2_lock.png", "Y2 (Sağ Eksen) Kilidi", checkable=True)
 
         self._qb_mode_group = QButtonGroup(self)
         self._qb_mode_group.setExclusive(True)
@@ -2939,6 +3047,15 @@ class MainWindow(QMainWindow):
         self.sp_y_shift.setKeyboardTracking(False)
         self.sp_y_shift.setToolTip("Kanal başına Y kaydırma. Dikey ofset değeri.")
 
+        self.cmb_axis_side = QComboBox()
+        self.cmb_axis_side.addItem("Otomatik (dijital → Y2)", userData="auto")
+        self.cmb_axis_side.addItem("Sol Eksen (Y1)", userData="left")
+        self.cmb_axis_side.addItem("Sağ Eksen (Y2)", userData="right")
+        self.cmb_axis_side.setToolTip(
+            "Kanalın çizileceği Y ekseni (Excel'deki ikincil eksen gibi).\n"
+            "Otomatik: dijital sinyaller sağ (Y2), analog sinyaller sol (Y1) eksene gider."
+        )
+
         self.btn_style_apply = QPushButton("Uygula")
         self.btn_style_default = QPushButton("Varsayılan")
         self.btn_style_reset_all = QPushButton("Tümünü Sıfırla")
@@ -2972,6 +3089,8 @@ class MainWindow(QMainWindow):
         sg.addWidget(self.btn_style_apply, 2, 4)
         sg.addWidget(self.btn_style_default, 2, 5)
         sg.addWidget(self.btn_style_reset_all, 3, 0, 1, 2)
+        sg.addWidget(QLabel("Eksen:"), 3, 2)
+        sg.addWidget(self.cmb_axis_side, 3, 3, 1, 2)
         sg.addWidget(self.shift_series_tree, 4, 0, 1, 6)
         shift_btn_row = QHBoxLayout()
         shift_btn_row.addWidget(self.btn_shift_check_all)
@@ -3142,6 +3261,7 @@ class MainWindow(QMainWindow):
         self.spin_smooth_win.valueChanged.connect(self.update_plot_data_with_filter)
 
         self.cmb_style_series.currentIndexChanged.connect(self._on_style_series_changed)
+        self.cmb_axis_side.currentIndexChanged.connect(self._on_axis_side_changed)
         self.btn_pick_color.clicked.connect(self.pick_color_for_selected_series)
         self.btn_style_apply.clicked.connect(self.apply_style_for_selected_series)
         self.btn_style_default.clicked.connect(self.reset_style_for_selected_series)
@@ -3419,6 +3539,41 @@ class MainWindow(QMainWindow):
         data = self.cmb_style_series.itemData(idx, role=Qt.ItemDataRole.UserRole)
         return data if isinstance(data, str) else None
 
+    def _current_axis_side(self) -> str:
+        idx = self.cmb_axis_side.currentIndex()
+        data = self.cmb_axis_side.itemData(idx, role=Qt.ItemDataRole.UserRole) if idx >= 0 else None
+        return data if data in ("auto", "left", "right") else "auto"
+
+    def _set_axis_side_combo(self, side: str) -> None:
+        side = side if side in ("auto", "left", "right") else "auto"
+        blocked = self.cmb_axis_side.blockSignals(True)
+        try:
+            for i in range(self.cmb_axis_side.count()):
+                if self.cmb_axis_side.itemData(i, role=Qt.ItemDataRole.UserRole) == side:
+                    self.cmb_axis_side.setCurrentIndex(i)
+                    break
+        finally:
+            self.cmb_axis_side.blockSignals(blocked)
+
+    def _on_axis_side_changed(self, *_: Any) -> None:
+        """Excel-style axis assignment: apply immediately on combo change."""
+        skey = self._current_style_key()
+        if not skey:
+            return
+        side = self._current_axis_side()
+        st = self.style_map.get(skey, {})
+        if side == "auto":
+            st.pop("axis", None)
+        else:
+            st["axis"] = side
+        if st:
+            self.style_map[skey] = st
+        else:
+            self.style_map.pop(skey, None)
+        self.update_plot_data_with_filter()
+        names = {"auto": "Otomatik", "left": "Sol (Y1)", "right": "Sağ (Y2)"}
+        self.status.showMessage(f"Eksen ataması: {names[side]}", 2500)
+
     def _on_style_series_changed(self, *_: Any) -> None:
         skey = self._current_style_key()
         if not skey:
@@ -3426,6 +3581,7 @@ class MainWindow(QMainWindow):
             self.sp_line_width.setValue(2.0)
             self.sp_x_shift.setValue(0.0)
             self.sp_y_shift.setValue(0.0)
+            self._set_axis_side_combo("auto")
             return
         st = self.style_map.get(skey, {})
         col = st.get("color")
@@ -3441,6 +3597,7 @@ class MainWindow(QMainWindow):
             self.sp_y_shift.setValue(float(st.get("y_shift", 0.0) or 0.0))
         except Exception:
             self.sp_y_shift.setValue(0.0)
+        self._set_axis_side_combo(str(st.get("axis", "auto") or "auto"))
 
     def pick_color_for_selected_series(self) -> None:
         skey = self._current_style_key()
@@ -3468,6 +3625,11 @@ class MainWindow(QMainWindow):
         st["width"] = float(self.sp_line_width.value())
         st["x_shift"] = float(self.sp_x_shift.value())
         st["y_shift"] = float(self.sp_y_shift.value())
+        side = self._current_axis_side()
+        if side == "auto":
+            st.pop("axis", None)
+        else:
+            st["axis"] = side
         self.style_map[skey] = st
         self.update_plot_data_with_filter()
 
@@ -3480,6 +3642,7 @@ class MainWindow(QMainWindow):
         self.sp_line_width.setValue(2.0)
         self.sp_x_shift.setValue(0.0)
         self.sp_y_shift.setValue(0.0)
+        self._set_axis_side_combo("auto")
         self.update_plot_data_with_filter()
 
     def reset_all_styles(self) -> None:
@@ -4401,8 +4564,10 @@ class MainWindow(QMainWindow):
                     writer.writerow([x_header, y_header])
 
                     x, y = self._load_full_xy(s)
-                    for xi, yi in zip(x, y):
-                        writer.writerow([f"{xi:.12g}", f"{yi:.12g}"])
+                    # Bulk write is much faster than per-row writerow calls
+                    writer.writerows(
+                        (f"{xi:.12g}", f"{yi:.12g}") for xi, yi in zip(x, y)
+                    )
                     writer.writerow([])
 
             self.status.showMessage(f"{os.path.basename(path)} dosyasına aktarıldı", 3000)
