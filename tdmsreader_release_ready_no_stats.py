@@ -1805,25 +1805,40 @@ class PlotPane(QWidget):
         except Exception:
             pass
 
-        analog = [s for s in series_list if not s.get("is_digital")]
-        digital = [s for s in series_list if s.get("is_digital")]
+        smap = style_map or {}
 
-        y_left = self._compute_y_label(analog) if analog else (self._compute_y_label(series_list) or "Değer")
+        def _is_secondary(s: dict) -> bool:
+            skey = s.get("style_key", "")
+            return bool(smap.get(skey, {}).get("secondary"))
 
-        if digital:
+        # Digital channels always use the right axis. Analog channels can be
+        # routed to the right (secondary) axis on demand, Excel-style.
+        left_series = [s for s in series_list if not (s.get("is_digital") or _is_secondary(s))]
+        right_series = [s for s in series_list if (s.get("is_digital") or _is_secondary(s))]
+        right_analog = [s for s in right_series if not s.get("is_digital")]
+        right_digital = [s for s in right_series if s.get("is_digital")]
+
+        y_left = self._compute_y_label(left_series) if left_series else (self._compute_y_label(series_list) or "Değer")
+
+        if right_series:
             self._ensure_right_axis()
-            self._set_axis_titles(x_label, y_left, "Dijital")
+            if right_analog:
+                y_right = self._compute_y_label(right_analog)
+                if right_digital:
+                    y_right = f"{y_right} / Dijital"
+            else:
+                y_right = "Dijital"
+            self._set_axis_titles(x_label, y_left, y_right)
         else:
             self._destroy_right_axis()
             self._set_axis_titles(x_label, y_left, None)
 
         n_total = len(series_list)
-        smap = style_map or {}
         i_global = 0
         right_mins: List[float] = []
         right_maxs: List[float] = []
 
-        def _make_label(s: dict, is_dig: bool = False, x_shift: float = 0.0, y_shift: float = 0.0) -> str:
+        def _make_label(s: dict, is_dig: bool = False, on_secondary: bool = False, x_shift: float = 0.0, y_shift: float = 0.0) -> str:
             parts = []
             fl = (s.get("file_label") or "").strip()
             nm = (s.get("name") or "").strip()
@@ -1839,6 +1854,8 @@ class PlotPane(QWidget):
                 parts[0] += f" {tag}"
             if is_dig:
                 parts[0] += " [DİJ]"
+            if on_secondary and not is_dig:
+                parts[0] += " [Y2]"
             if x_shift != 0.0:
                 parts[0] += f" (x{x_shift:+g})"
             if y_shift != 0.0:
@@ -1853,8 +1870,8 @@ class PlotPane(QWidget):
             ys = float(st.get("y_shift", 0.0) or 0.0)
             return color, width, xs if math.isfinite(xs) else 0.0, ys if math.isfinite(ys) else 0.0
 
-        # Analog
-        for s in analog:
+        # Left (primary) axis
+        for s in left_series:
             skey = s.get("style_key", "")
             color, width, x_shift, y_shift = _get_style(skey)
             x_raw = s["x"]
@@ -1884,13 +1901,14 @@ class PlotPane(QWidget):
                     pass
             i_global += 1
 
-        # Digital
-        for s in digital:
+        # Right (secondary) axis: digital as step plots, analog as normal lines
+        for s in right_series:
             if self._right_vb is None:
                 self._ensure_right_axis()
             if self._right_vb is None:
                 break
 
+            is_dig = bool(s.get("is_digital"))
             skey = s.get("style_key", "")
             color, width, x_shift, y_shift = _get_style(skey)
             x_raw = s["x"]
@@ -1899,7 +1917,7 @@ class PlotPane(QWidget):
             y = (np.asarray(y_raw, dtype=np.float64) + y_shift) if y_shift else y_raw
 
             levels = s.get("digital_levels")
-            if isinstance(levels, (tuple, list)) and len(levels) == 2:
+            if is_dig and isinstance(levels, (tuple, list)) and len(levels) == 2:
                 try:
                     lo, hi = float(levels[0]), float(levels[1])
                     if math.isfinite(lo) and math.isfinite(hi):
@@ -1921,10 +1939,25 @@ class PlotPane(QWidget):
                 except Exception:
                     pass
 
-            label = _make_label(s, is_dig=True, x_shift=x_shift, y_shift=y_shift)
+            label = _make_label(s, is_dig=is_dig, on_secondary=not is_dig, x_shift=x_shift, y_shift=y_shift)
             pen_color = color if color is not None else pg.intColor(i_global, hues=max(1, n_total))
             pen = pg.mkPen(pen_color, width=width)
-            item = self._plot_digital_step(x, y, pen, viewbox=self._right_vb)
+
+            if is_dig:
+                item = self._plot_digital_step(x, y, pen, viewbox=self._right_vb)
+            else:
+                item = pg.PlotDataItem(pen=pen)
+                try:
+                    item.setData(x, y, skipFiniteCheck=True)
+                except TypeError:
+                    item.setData(x, y)
+                try:
+                    item.setDownsampling(auto=True, mode="peak")
+                    item.setClipToView(True)
+                except Exception:
+                    pass
+                self._right_vb.addItem(item)
+
             if item is None:
                 i_global += 1
                 continue
@@ -2939,6 +2972,14 @@ class MainWindow(QMainWindow):
         self.sp_y_shift.setKeyboardTracking(False)
         self.sp_y_shift.setToolTip("Kanal başına Y kaydırma. Dikey ofset değeri.")
 
+        self.chk_secondary_axis = QCheckBox("Seçili kanalı ikincil eksende (Y2) göster")
+        self.chk_secondary_axis.setToolTip(
+            "İşaretlendiğinde seçili kanal, sağdaki ikincil (Y2) eksene taşınır; "
+            "böylece farklı ölçekteki verileri Excel'deki gibi birlikte "
+            "görebilirsiniz. Dijital kanallar zaten otomatik olarak ikincil "
+            "eksende çizilir."
+        )
+
         self.btn_style_apply = QPushButton("Uygula")
         self.btn_style_default = QPushButton("Varsayılan")
         self.btn_style_reset_all = QPushButton("Tümünü Sıfırla")
@@ -2972,6 +3013,7 @@ class MainWindow(QMainWindow):
         sg.addWidget(self.btn_style_apply, 2, 4)
         sg.addWidget(self.btn_style_default, 2, 5)
         sg.addWidget(self.btn_style_reset_all, 3, 0, 1, 2)
+        sg.addWidget(self.chk_secondary_axis, 3, 2, 1, 4)
         sg.addWidget(self.shift_series_tree, 4, 0, 1, 6)
         shift_btn_row = QHBoxLayout()
         shift_btn_row.addWidget(self.btn_shift_check_all)
@@ -3146,6 +3188,7 @@ class MainWindow(QMainWindow):
         self.btn_style_apply.clicked.connect(self.apply_style_for_selected_series)
         self.btn_style_default.clicked.connect(self.reset_style_for_selected_series)
         self.btn_style_reset_all.clicked.connect(self.reset_all_styles)
+        self.chk_secondary_axis.toggled.connect(self._on_secondary_axis_toggled)
 
         self.btn_shift_apply.clicked.connect(self.apply_shift_for_checked_series)
         self.btn_shift_reset.clicked.connect(self.reset_shift_for_checked_series)
@@ -3426,6 +3469,7 @@ class MainWindow(QMainWindow):
             self.sp_line_width.setValue(2.0)
             self.sp_x_shift.setValue(0.0)
             self.sp_y_shift.setValue(0.0)
+            self._silent_set_checked(self.chk_secondary_axis, False)
             return
         st = self.style_map.get(skey, {})
         col = st.get("color")
@@ -3433,6 +3477,7 @@ class MainWindow(QMainWindow):
             col = qcolor_to_tuple(col)
         self._set_color_button_preview(col if isinstance(col, tuple) else None)
         self.sp_line_width.setValue(float(st.get("width", 2.0)))
+        self._silent_set_checked(self.chk_secondary_axis, bool(st.get("secondary")))
         try:
             self.sp_x_shift.setValue(float(st.get("x_shift", 0.0) or 0.0))
         except Exception:
@@ -3480,11 +3525,25 @@ class MainWindow(QMainWindow):
         self.sp_line_width.setValue(2.0)
         self.sp_x_shift.setValue(0.0)
         self.sp_y_shift.setValue(0.0)
+        self._silent_set_checked(self.chk_secondary_axis, False)
         self.update_plot_data_with_filter()
 
     def reset_all_styles(self) -> None:
         self.style_map.clear()
         self._on_style_series_changed()
+        self.update_plot_data_with_filter()
+
+    def _on_secondary_axis_toggled(self, checked: bool) -> None:
+        """Route the currently selected channel to the secondary (Y2) axis."""
+        skey = self._current_style_key()
+        if not skey:
+            return
+        st = self.style_map.get(skey, {})
+        if checked:
+            st["secondary"] = True
+        else:
+            st.pop("secondary", None)
+        self.style_map[skey] = st
         self.update_plot_data_with_filter()
 
     # ----- Shift series tree -----
