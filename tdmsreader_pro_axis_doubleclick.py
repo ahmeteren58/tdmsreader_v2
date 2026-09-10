@@ -1071,7 +1071,7 @@ def linear_detrend_safe(y: np.ndarray) -> np.ndarray:
 
 
 def padded_minmax(
-    values: np.ndarray, pad_ratio: float = 0.06,
+    values: np.ndarray, pad_ratio: float = CFG.pad_ratio,
 ) -> Optional[Tuple[float, float]]:
     arr = np.asarray(values, dtype=np.float64)
     arr = arr[np.isfinite(arr)]
@@ -1108,8 +1108,8 @@ def _format_x_display(axis_mode: str, x: float) -> str:
 
 def detect_digital_like(
     y: np.ndarray,
-    max_levels: int = 8,
-    sample_limit: int = 50_000,
+    max_levels: int = CFG.max_digital_levels,
+    sample_limit: int = CFG.digital_sample_limit,
 ) -> Tuple[bool, Optional[Tuple[float, float]]]:
     """Detect whether *y* looks like a digital/discrete signal.
 
@@ -1829,6 +1829,7 @@ class PlotPane(QWidget):
 
         self._crosshair_v: Optional[pg.InfiniteLine] = None
         self._crosshair_h: Optional[pg.InfiniteLine] = None
+        self._mouse_proxy: Optional[pg.SignalProxy] = None
 
         self._info = QLabel("İmleç: —")
         self._info.setObjectName("cursorInfo")
@@ -2206,6 +2207,13 @@ class PlotPane(QWidget):
 
         if self.plot is not None:
             self._destroy_right_axis()
+            # Drop the mouse proxy before the scene it listens to disappears.
+            if self._mouse_proxy is not None:
+                try:
+                    self._mouse_proxy.disconnect()
+                except Exception:
+                    logger.debug("Mouse proxy disconnect failed", exc_info=True)
+                self._mouse_proxy = None
             self._layout.removeWidget(self.plot)
             self.plot.deleteLater()
             self.plot = None
@@ -3396,6 +3404,7 @@ class MainWindow(QMainWindow):
         self._lazy_view_token = 0
         self._preserve_main_xrange: Optional[Tuple[float, float]] = None
         self._preserve_detached_xrange: Optional[Tuple[float, float]] = None
+        self._preserve_stacked_xrange: Optional[Tuple[float, float]] = None
 
         self._build_ui()
         self._build_menu_bar()
@@ -3554,10 +3563,18 @@ class MainWindow(QMainWindow):
         act = view_menu.addAction("Detay Ayarları")
         act.triggered.connect(lambda: self._set_advanced_controls_visible(not self.controls_dock.isVisible()))
         view_menu.addSeparator()
+        act = view_menu.addAction("Grafik Çalışma Alanı")
+        act.triggered.connect(self._show_plot_tab)
+        act = view_menu.addAction("Aralık Analizi")
+        act.triggered.connect(lambda: self._activate_tab_by_text("Aralık Analizi"))
+        act = view_menu.addAction("Frekans Analizi (FFT)")
+        act.triggered.connect(lambda: self._activate_tab_by_text("Frekans Analizi (FFT)"))
         act = view_menu.addAction("Kanal Yöneticisi")
         act.triggered.connect(self._open_channel_manager_tab)
         act = view_menu.addAction("Hesaplanan Kanal")
         act.triggered.connect(self._open_calculated_channel_tab)
+        act = view_menu.addAction("Manuel Fs")
+        act.triggered.connect(self._open_manual_fs_tab)
 
         help_menu = mb.addMenu("Yardım")
         act = help_menu.addAction("Klavye Kısayolları")
@@ -3698,7 +3715,6 @@ class MainWindow(QMainWindow):
             self, "Hakkında",
             "<h3>TDMS Okuyucu</h3>"
             "<p>NI TDMS dosyaları için DIAdem benzeri görüntüleyici ihtiyacı doğrultusunda geliştirilmiştir.</p>"
-            "</ul>"
             "<h3>RİTİM - Akış Kontrol Bileşenleri Geliştirme Birimi.</h3>"
         )
 
@@ -4081,10 +4097,16 @@ class MainWindow(QMainWindow):
                 pass
         shown = abs(float(x1) - float(x0)) if x0 is not None and x1 is not None else float("nan")
 
+        # Index-based channels are counted in samples, not seconds.
+        x_modes = {str(s.get("x_mode", "index") or "index") for s in self.current_series}
+        span_unit = "örnek" if x_modes == {"index"} else "s"
+
         if getattr(self, "lbl_ws_range", None) is not None:
-            self.lbl_ws_range.setText(f"{shown:.6g} s" if math.isfinite(shown) else "—")
+            self.lbl_ws_range.setText(f"{shown:.6g} {span_unit}" if math.isfinite(shown) else "—")
         if getattr(self, "lbl_ws_duration", None) is not None:
-            self.lbl_ws_duration.setText(f"{total_duration:.6g} s" if math.isfinite(total_duration) else "—")
+            self.lbl_ws_duration.setText(
+                f"{total_duration:.6g} {span_unit}" if math.isfinite(total_duration) else "—"
+            )
         if getattr(self, "lbl_ws_samples", None) is not None:
             self.lbl_ws_samples.setText(f"{len(self.current_series)} / {self._format_compact_count(total_samples)}")
         if getattr(self, "lbl_ws_fs", None) is not None:
@@ -5633,16 +5655,19 @@ class MainWindow(QMainWindow):
         if not st:
             return
         tree = st.tree
-        t = (t or "").lower().strip()
+        t = (t or "").casefold().strip()
         for i in range(tree.topLevelItemCount()):
             g = tree.topLevelItem(i)
+            # A matching group name keeps all of its channels visible, so users
+            # can search by group as well as by channel.
+            group_match = bool(t) and t in g.text(0).casefold()
             any_vis = False
             for j in range(g.childCount()):
                 c = g.child(j)
-                match = (t in c.text(0).lower()) if t else True
+                match = True if (not t or group_match) else (t in c.text(0).casefold())
                 c.setHidden(not match)
                 any_vis = any_vis or match
-            g.setHidden(not any_vis)
+            g.setHidden(not (any_vis or group_match))
 
     def on_item_changed(self, file_id: str, item: QTreeWidgetItem, col: int) -> None:
         if col != 0:
@@ -5788,7 +5813,8 @@ class MainWindow(QMainWindow):
                 quality = f"NaN:{nan_n} Inf:{inf_n}" + (" (görünüm)" if s.get("lazy") else "")
             except Exception:
                 quality = "—"
-            item = QTreeWidgetItem(["", str(s.get("file_label", "")), str(s.get("name", "")), "", "", "", src, "", "", "", f"{duration:.6g} s" if math.isfinite(duration) else "—", quality])
+            span_unit = "örnek" if str(s.get("x_mode", "index") or "index") == "index" else "s"
+            item = QTreeWidgetItem(["", str(s.get("file_label", "")), str(s.get("name", "")), "", "", "", src, "", "", "", f"{duration:.6g} {span_unit}" if math.isfinite(duration) else "—", quality])
             item.setData(0, Qt.ItemDataRole.UserRole, skey)
             tree.addTopLevelItem(item)
             vis = QCheckBox(); vis.setChecked(st.get("visible", True) is not False); tree.setItemWidget(item, 0, vis)
@@ -6006,6 +6032,9 @@ class MainWindow(QMainWindow):
         self.btn_range_stats_calc = QPushButton("İstatistikleri Hesapla")
         self.btn_range_stats_calc.setProperty("primary", True)
         self.btn_range_stats_clear = QPushButton("Sonuçları Temizle")
+        self.btn_range_stats_export = QPushButton("Sonuçları CSV'ye Aktar")
+        self.btn_range_stats_export.setToolTip("Tablodaki istatistik sonuçlarını CSV olarak kaydet")
+        self.btn_range_stats_export.setEnabled(False)
 
         grid.addWidget(QLabel("Başlangıç:"), 0, 0)
         grid.addWidget(self.range_stats_xmin, 0, 1)
@@ -6015,6 +6044,7 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.btn_range_stats_calc, 0, 5)
         grid.addWidget(self.btn_range_stats_visible, 1, 0, 1, 2)
         grid.addWidget(self.btn_range_stats_full, 1, 2, 1, 2)
+        grid.addWidget(self.btn_range_stats_export, 1, 4)
         grid.addWidget(self.btn_range_stats_clear, 1, 5)
         grid.setColumnStretch(4, 1)
         layout.addWidget(controls)
@@ -6050,7 +6080,46 @@ class MainWindow(QMainWindow):
         self.btn_range_stats_full.clicked.connect(self._range_stats_use_full)
         self.btn_range_stats_calc.clicked.connect(self._calculate_range_stats)
         self.btn_range_stats_clear.clicked.connect(self._clear_range_stats_results)
+        self.btn_range_stats_export.clicked.connect(self._export_range_stats_csv)
         return tab
+
+    def _export_range_stats_csv(self) -> None:
+        """Write the interval-statistics table to a CSV file."""
+        tree = getattr(self, "range_stats_tree", None)
+        if tree is None or tree.topLevelItemCount() == 0:
+            QMessageBox.information(self, "Aralık Analizi", "Önce istatistikleri hesaplayın.")
+            return
+
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Aralık İstatistiklerini Kaydet", "", "CSV dosyaları (*.csv);;Tüm dosyalar (*)",
+        )
+        if not path:
+            return
+        if not os.path.splitext(path)[1]:
+            path += ".csv"
+
+        headers = [
+            tree.headerItem().text(c) for c in range(tree.columnCount())
+        ]
+        try:
+            import csv
+            with open(path, "w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f, delimiter=";")
+                writer.writerow([
+                    "Aralık başlangıç", f"{self.range_stats_xmin.value():.12g}",
+                    "Aralık bitiş", f"{self.range_stats_xmax.value():.12g}",
+                    self._range_stats_axis_text(),
+                ])
+                writer.writerow([])
+                writer.writerow(headers)
+                for i in range(tree.topLevelItemCount()):
+                    item = tree.topLevelItem(i)
+                    writer.writerow([item.text(c) for c in range(tree.columnCount())])
+            self.status.showMessage(
+                f"Aralık istatistikleri kaydedildi: {os.path.basename(path)}", 3000
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Dışa Aktarma Hatası", f"CSV yazılamadı:\n{e}")
 
     def _range_stats_axis_text(self) -> str:
         if not self.current_series:
@@ -6104,11 +6173,13 @@ class MainWindow(QMainWindow):
         self.lbl_range_stats_axis.setText(self._range_stats_axis_text())
 
     def _range_stats_use_visible(self) -> None:
-        if not self.current_series or self.plot_pane.plot is None:
+        stacked = getattr(self, "_active_plot_mode", "Overlay") == "Stacked"
+        has_view = bool(self.stacked_view._plots) if stacked else self.plot_pane.plot is not None
+        if not self.current_series or not has_view:
             QMessageBox.information(self, "Aralık Analizi", "Önce en az bir kanal çizin.")
             return
         try:
-            if getattr(self, "_active_plot_mode", "Overlay") == "Stacked" and self.stacked_view._plots:
+            if stacked:
                 xr = self.stacked_view._plots[0].getViewBox().viewRange()[0]
             else:
                 xr = self.plot_pane.plot.getViewBox().viewRange()[0]
@@ -6125,6 +6196,8 @@ class MainWindow(QMainWindow):
             tree.clear()
         if getattr(self, "lbl_range_stats_summary", None) is not None:
             self.lbl_range_stats_summary.setText("Sonuçlar temizlendi.")
+        if getattr(self, "btn_range_stats_export", None) is not None:
+            self.btn_range_stats_export.setEnabled(False)
 
     def _range_stats_requests(self) -> List[dict]:
         requests: List[dict] = []
@@ -6233,6 +6306,7 @@ class MainWindow(QMainWindow):
                 self.range_stats_tree.addTopLevelItem(item)
         finally:
             self.range_stats_tree.setUpdatesEnabled(True)
+        self.btn_range_stats_export.setEnabled(bool(rows))
 
         errors = payload.get("errors") or []
         x0, x1 = payload.get("x_min"), payload.get("x_max")
@@ -7423,8 +7497,11 @@ class MainWindow(QMainWindow):
                     writer.writerow([x_header, y_header])
 
                     x, y = self._load_full_xy(s)
-                    for xi, yi in zip(x, y):
-                        writer.writerow([f"{xi:.12g}", f"{yi:.12g}"])
+                    # writerows over a generator avoids a Python-level call per
+                    # sample, which matters for multi-million-sample channels.
+                    writer.writerows(
+                        (f"{xi:.12g}", f"{yi:.12g}") for xi, yi in zip(x, y)
+                    )
                     writer.writerow([])
 
             self.status.showMessage(f"{os.path.basename(path)} dosyasına aktarıldı", 3000)
