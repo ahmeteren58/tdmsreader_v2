@@ -71,6 +71,7 @@ from PyQt6.QtWidgets import (
     QFormLayout, QDoubleSpinBox, QTabWidget, QComboBox, QButtonGroup, QSpinBox,
     QColorDialog, QGridLayout, QSizePolicy, QToolButton, QFrame,
     QProgressBar, QMenu, QMenuBar, QDialog, QTextBrowser, QStackedWidget, QScrollArea, QStyle, QFontComboBox,
+    QTabBar,
 )
 
 # ---------------------------------------------------------------------------
@@ -924,6 +925,119 @@ def _bg_to_fg_rgb(bg: Tuple[int, int, int]) -> Tuple[int, int, int]:
     return (0, 0, 0) if lum > 140 else (255, 255, 255)
 
 
+# ---------------------------------------------------------------------------
+# Icon resources
+# ---------------------------------------------------------------------------
+
+APP_ICON_CANDIDATES: Tuple[str, ...] = (
+    "app_icon.png", "app_icon.ico", "logo.png", "logo.ico",
+    "tdmsreader.png", "tdmsreader.ico", "icon.png", "icon.ico",
+)
+
+_ICON_DIR_CACHE: Optional[List[str]] = None
+_ICON_CACHE: Dict[str, QIcon] = {}
+
+
+def icon_search_dirs(refresh: bool = False) -> List[str]:
+    """Return every existing directory that may hold PNG resources.
+
+    Covers source checkouts, PyInstaller one-file (``sys._MEIPASS``) and one-dir
+    builds, plus a user-overridable folder next to the executable.  Both an
+    ``icons`` subfolder and the plain base directory are accepted so loose PNGs
+    keep working without being moved.
+    """
+    global _ICON_DIR_CACHE
+    if _ICON_DIR_CACHE is not None and not refresh:
+        return _ICON_DIR_CACHE
+
+    bases: List[str] = []
+
+    env_dir = (os.environ.get("TDMSREADER_ICON_DIR", "") or "").strip()
+    if env_dir:
+        bases.append(env_dir)
+
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        bases.extend([meipass, os.path.join(meipass, "_internal")])
+
+    for getter in (
+        lambda: os.path.dirname(os.path.abspath(sys.executable)),
+        lambda: os.path.dirname(os.path.abspath(__file__)),
+        lambda: os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        os.getcwd,
+    ):
+        try:
+            bases.append(getter())
+        except Exception:
+            logger.debug("Icon base directory lookup failed", exc_info=True)
+
+    # Every dedicated "icons" folder is preferred over any plain base directory,
+    # so a stray PNG in a system path can never shadow the bundled resources.
+    candidates: List[str] = []
+    for base in bases:
+        if base:
+            candidates.extend([
+                os.path.join(base, "icons"),
+                os.path.join(base, "_internal", "icons"),
+            ])
+    candidates.extend(b for b in bases if b)
+
+    seen: set = set()
+    resolved: List[str] = []
+    for d in candidates:
+        try:
+            d = os.path.normpath(os.path.abspath(d))
+        except Exception:
+            continue
+        key = os.path.normcase(d)
+        if key in seen:
+            continue
+        seen.add(key)
+        if os.path.isdir(d):
+            resolved.append(d)
+
+    _ICON_DIR_CACHE = resolved
+    return resolved
+
+
+def load_app_icon(filename: str) -> QIcon:
+    """Load and cache an original PNG/ICO icon from bundled or external resources."""
+    if not filename:
+        return QIcon()
+    cached = _ICON_CACHE.get(filename)
+    if cached is not None:
+        return cached
+
+    icon = QIcon()
+    for d in icon_search_dirs():
+        p = os.path.join(d, filename)
+        if not os.path.isfile(p):
+            continue
+        candidate = QIcon(p)
+        if candidate.isNull():
+            # QPixmap gives a second chance when QIcon's path loader behaves
+            # differently inside a frozen Qt application.
+            pix = QPixmap(p)
+            candidate = QIcon(pix) if not pix.isNull() else QIcon()
+        if not candidate.isNull():
+            icon = candidate
+            break
+
+    if icon.isNull():
+        logger.debug("Icon not found or unreadable: %s; dirs=%s", filename, icon_search_dirs())
+    _ICON_CACHE[filename] = icon
+    return icon
+
+
+def resolve_application_icon() -> QIcon:
+    """Return the window/taskbar icon, falling back to a bundled toolbar glyph."""
+    for name in APP_ICON_CANDIDATES:
+        icon = load_app_icon(name)
+        if not icon.isNull():
+            return icon
+    return load_app_icon("zoom_plus.png")
+
+
 def apply_plotwidget_theme(pw: PlotWidget, bg_rgb: Tuple[int, int, int]) -> None:
     fg = _bg_to_fg_rgb(bg_rgb)
     pw.setBackground(bg_rgb)
@@ -1591,10 +1705,16 @@ class FFTWorker(CancellableWorker):
                 y -= np.nanmean(y)
             y = np.nan_to_num(y, nan=0.0, posinf=0.0, neginf=0.0)
 
-            fs = robust_fs_from_x(np.asarray(self.x, dtype=np.float64))
-            if fs is None:
-                fs = self.fs_hint
-            if fs is None or fs <= 0:
+            # An explicitly entered Fs is authoritative; the X-axis estimate is
+            # only a fallback (the UI documents 0 as "derive from time axis").
+            fs: Optional[float] = None
+            fs_source = "manuel"
+            if self.fs_hint is not None and math.isfinite(self.fs_hint) and self.fs_hint > 0:
+                fs = float(self.fs_hint)
+            else:
+                fs = robust_fs_from_x(np.asarray(self.x, dtype=np.float64))
+                fs_source = "zaman ekseni"
+            if fs is None or not math.isfinite(fs) or fs <= 0:
                 raise ValueError("Örnekleme hızı (Fs) bilinmiyor. Fs'yi manuel girin veya zamana dayalı bir kanal seçin.")
 
             window_name = "None"
@@ -1620,6 +1740,7 @@ class FFTWorker(CancellableWorker):
                 "freq": freq.astype(np.float64),
                 "mag_linear": mag.astype(np.float64),
                 "fs": float(fs),
+                "fs_source": fs_source,
                 "n": int(y.size),
                 "df": float(fs / y.size),
                 "window_name": window_name,
@@ -2538,56 +2659,65 @@ class PlotPane(QWidget):
                     pass
             i_global += 1
 
-        for s in left_series:
-            _add_series(s, "left")
-        for s in right_series:
-            if self._right_vb is None:
-                self._ensure_right_axis()
-            _add_series(s, "right")
+        def _render_and_fit() -> None:
+            for s in left_series:
+                _add_series(s, "left")
+            for s in right_series:
+                if self._right_vb is None:
+                    self._ensure_right_axis()
+                _add_series(s, "right")
 
-        self._right_data_bounds = (min(right_mins), max(right_maxs)) if right_mins else None
-        vb = self.plot.getViewBox()
-        try:
-            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
-            vb.autoRange()
-        except Exception:
-            self.plot.enableAutoRange()
-
-        if self._right_vb is not None:
-            if self._right_y_lock_enabled:
-                self._enforce_right_y_lock()
-            elif self._right_data_bounds is not None:
-                d0, d1 = self._right_data_bounds
-                pad = 0.05 * (d1 - d0) if d1 > d0 else 0.25
-                try:
-                    self._right_vb.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
-                    self._right_vb.setYRange(d0 - pad, d1 + pad, padding=0.0)
-                except Exception:
-                    pass
-
-        try:
-            self._base_left_yrange = tuple(vb.viewRange()[1])
-        except Exception:
-            self._base_left_yrange = None
-        if self._right_vb is not None:
+            self._right_data_bounds = (min(right_mins), max(right_maxs)) if right_mins else None
+            vb = self.plot.getViewBox()
             try:
-                self._base_right_yrange = tuple(self._right_vb.viewRange()[1])
+                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+                vb.autoRange()
             except Exception:
-                self._base_right_yrange = None
+                self.plot.enableAutoRange()
+
+            if self._right_vb is not None:
+                if self._right_y_lock_enabled:
+                    self._enforce_right_y_lock()
+                elif self._right_data_bounds is not None:
+                    d0, d1 = self._right_data_bounds
+                    pad = 0.05 * (d1 - d0) if d1 > d0 else 0.25
+                    try:
+                        self._right_vb.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
+                        self._right_vb.setYRange(d0 - pad, d1 + pad, padding=0.0)
+                    except Exception:
+                        pass
+
+            try:
+                self._base_left_yrange = tuple(vb.viewRange()[1])
+            except Exception:
+                self._base_left_yrange = None
+            if self._right_vb is not None:
+                try:
+                    self._base_right_yrange = tuple(self._right_vb.viewRange()[1])
+                except Exception:
+                    self._base_right_yrange = None
+            try:
+                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=False)
+            except Exception:
+                pass
+            self._sync_right_yrange_to_left()
+            if self._region_enabled:
+                self.enable_region(True)
+
+        # Repaints and the batch flag must be restored even if a single
+        # malformed channel raises, otherwise the plot stays frozen forever.
         try:
-            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=False)
+            _render_and_fit()
         except Exception:
-            pass
-        self._sync_right_yrange_to_left()
-        if self._region_enabled:
-            self.enable_region(True)
-        try:
-            self.plot.setUpdatesEnabled(True)
-        except Exception:
-            pass
-        self._batch_plotting = False
-        if self.legend is not None:
-            self.legend.setVisible(self._legend_visible)
+            logger.exception("Seri çizimi tamamlanamadı")
+        finally:
+            try:
+                self.plot.setUpdatesEnabled(True)
+            except Exception:
+                logger.debug("Plot repaint could not be re-enabled", exc_info=True)
+            self._batch_plotting = False
+            if self.legend is not None:
+                self.legend.setVisible(self._legend_visible)
         self._apply_theme()
         self._enforce_y_lock()
         self._enforce_right_y_lock()
@@ -2788,85 +2918,16 @@ class PlotPane(QWidget):
 
     def _icon_dirs(self) -> List[str]:
         """Return all likely icon directories for source, one-file and one-dir builds."""
-        candidates: List[str] = []
-
-        env_dir = (os.environ.get("TDMSREADER_ICON_DIR", "") or "").strip()
-        if env_dir:
-            candidates.append(env_dir)
-
-        # PyInstaller one-file extracts bundled data under sys._MEIPASS.
-        base = getattr(sys, "_MEIPASS", None)
-        if base:
-            candidates.extend([
-                os.path.join(base, "icons"),
-                os.path.join(base, "_internal", "icons"),
-            ])
-
-        # Directory containing the executable. Useful both for one-dir builds and
-        # as a user-overridable external icons folder next to the exe.
-        try:
-            exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-            candidates.extend([
-                os.path.join(exe_dir, "icons"),
-                os.path.join(exe_dir, "_internal", "icons"),
-            ])
-        except Exception:
-            pass
-
-        # Normal Python/source execution.
-        try:
-            src_dir = os.path.dirname(os.path.abspath(__file__))
-            candidates.extend([
-                os.path.join(src_dir, "icons"),
-                os.path.join(os.path.dirname(src_dir), "icons"),
-            ])
-        except Exception:
-            pass
-
-        try:
-            cwd = os.getcwd()
-            candidates.extend([
-                os.path.join(cwd, "icons"),
-                os.path.join(os.path.dirname(cwd), "icons"),
-            ])
-        except Exception:
-            pass
-
-        seen: set = set()
-        out: List[str] = []
-        for d in candidates:
-            if not d:
-                continue
-            d = os.path.normpath(os.path.abspath(d))
-            key = os.path.normcase(d)
-            if key in seen:
-                continue
-            seen.add(key)
-            if os.path.isdir(d):
-                out.append(d)
-        return out
+        return icon_search_dirs()
 
     def _load_icon(self, filename: str) -> QIcon:
         """Load an original PNG icon from bundled/external resources."""
-        for d in self._icon_dirs():
-            p = os.path.join(d, filename)
-            if not os.path.isfile(p):
-                continue
+        return load_app_icon(filename)
 
-            icon = QIcon(p)
-            if not icon.isNull():
-                return icon
-
-            # QPixmap fallback gives a second chance if QIcon's direct path
-            # loader behaves differently in a frozen Qt application.
-            pix = QPixmap(p)
-            if not pix.isNull():
-                return QIcon(pix)
-
-        logger.debug("Quickbar icon not found or could not be loaded: %s; dirs=%s", filename, self._icon_dirs())
-        return QIcon()
-
-    def _mk_qb_btn(self, filename: str, tooltip: str, *, checkable: bool = False) -> QToolButton:
+    def _mk_qb_btn(
+        self, filename: str, tooltip: str, *,
+        checkable: bool = False, fallback: str = "",
+    ) -> QToolButton:
         b = QToolButton()
         b.setAutoRaise(True)
         b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
@@ -2881,7 +2942,8 @@ class PlotPane(QWidget):
         if not ic.isNull():
             b.setIcon(ic)
         else:
-            b.setText(tooltip[:1])
+            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            b.setText(fallback or tooltip[:1])
         return b
 
     def _qb_set_checked(self, attr: str, checked: bool) -> None:
@@ -2903,14 +2965,14 @@ class PlotPane(QWidget):
         lay.setContentsMargins(4, 4, 4, 4)
         lay.setSpacing(6)
 
-        self._qb_pan = self._mk_qb_btn("pan_hand.png", "Kaydır", checkable=True)
-        self._qb_zoom = self._mk_qb_btn("zoom_plus.png", "Yakınlaştır (Dikdörtgen)", checkable=True)
-        self._qb_fit = self._mk_qb_btn("move_pan.png", "Otomatik Sığdır")
-        self._qb_region = self._mk_qb_btn("region_rect.png", "Aralık Seçici", checkable=True)
-        self._qb_legend = self._mk_qb_btn("legend_menu.png", "Gösterge", checkable=True)
-        self._qb_marker = self._mk_qb_btn("marker_pin.png", "Tıkla İşaretle", checkable=True)
-        self._qb_ylock = self._mk_qb_btn("y_lock.png", "Y Kilidi", checkable=True)
-        self._qb_y2lock = self._mk_qb_btn("y2_lock.png", "Y2 (Dijital) Kilidi", checkable=True)
+        self._qb_pan = self._mk_qb_btn("pan_hand.png", "Kaydır", checkable=True, fallback="✥")
+        self._qb_zoom = self._mk_qb_btn("zoom_plus.png", "Yakınlaştır (Dikdörtgen)", checkable=True, fallback="⊕")
+        self._qb_fit = self._mk_qb_btn("move_pan.png", "Otomatik Sığdır", fallback="⤢")
+        self._qb_region = self._mk_qb_btn("region_rect.png", "Aralık Seçici", checkable=True, fallback="▭")
+        self._qb_legend = self._mk_qb_btn("legend_menu.png", "Gösterge", checkable=True, fallback="☰")
+        self._qb_marker = self._mk_qb_btn("marker_pin.png", "Tıkla İşaretle", checkable=True, fallback="⚲")
+        self._qb_ylock = self._mk_qb_btn("y_lock.png", "Y Kilidi", checkable=True, fallback="Y🔒")
+        self._qb_y2lock = self._mk_qb_btn("y2_lock.png", "Y2 (Dijital) Kilidi", checkable=True, fallback="Y2🔒")
 
         self._qb_mode_group = QButtonGroup(self)
         self._qb_mode_group.setExclusive(True)
@@ -3265,6 +3327,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("TDMSReader AKBGB")
         self.resize(1680, 960)
+
+        app_icon = resolve_application_icon()
+        if not app_icon.isNull():
+            self.setWindowIcon(app_icon)
 
         self.settings = QSettings(CFG.settings_org, CFG.settings_app)
         self._theme = str(self.settings.value("ui/theme", "light") or "light").lower()
@@ -3682,6 +3748,17 @@ class MainWindow(QMainWindow):
         v.addWidget(cap)
         return group
 
+    def _show_plot_tab(self) -> None:
+        """Bring the main Graph workspace to the front, whatever its tab index is."""
+        tabs = getattr(self, "tabs", None)
+        tab = getattr(self, "plot_tab", None)
+        if tabs is None:
+            return
+        if tab is not None:
+            tabs.setCurrentWidget(tab)
+        else:
+            tabs.setCurrentIndex(0)
+
     def _activate_tab_by_text(self, text: str) -> None:
         tabs = getattr(self, "tabs", None)
         if tabs is None:
@@ -3817,8 +3894,7 @@ class MainWindow(QMainWindow):
             try:
                 # The drawer lives inside the Graph workspace. Bring it into
                 # view automatically when opened from the ribbon/corner button.
-                if getattr(self, "tabs", None) is not None:
-                    self.tabs.setCurrentIndex(0)
+                self._show_plot_tab()
                 self.btn_ctrl_collapse.setChecked(True)
                 self._on_controls_panel_toggled(True)
             except Exception:
@@ -3859,11 +3935,11 @@ class MainWindow(QMainWindow):
         details_ic = std_icon("SP_FileDialogContentsView", QStyle.StandardPixmap.SP_FileDialogDetailedView)
 
         try:
-            fit_ic = self.plot_pane._load_icon("move_pan.png")
-            pan_ic = self.plot_pane._load_icon("pan_hand.png")
-            zoom_ic = self.plot_pane._load_icon("zoom_plus.png")
-            region_ic = self.plot_pane._load_icon("region_rect.png")
-            marker_ic = self.plot_pane._load_icon("marker_pin.png")
+            fit_ic = load_app_icon("move_pan.png")
+            pan_ic = load_app_icon("pan_hand.png")
+            zoom_ic = load_app_icon("zoom_plus.png")
+            region_ic = load_app_icon("region_rect.png")
+            marker_ic = load_app_icon("marker_pin.png")
         except Exception:
             fit_ic = pan_ic = zoom_ic = region_ic = marker_ic = QIcon()
 
@@ -4081,6 +4157,12 @@ class MainWindow(QMainWindow):
         open_l.addWidget(self.lbl_hint)
         open_l.addStretch(1)
         self.file_tabs.addTab(open_tab, "Aç")
+        try:
+            # The permanent "Aç" tab cannot be closed, so it should not offer a
+            # close button that silently does nothing.
+            self.file_tabs.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)
+        except Exception:
+            logger.debug("Close button could not be removed from the Aç tab", exc_info=True)
 
         left_layout.addWidget(self.file_tabs, stretch=1)
 
@@ -4470,6 +4552,7 @@ class MainWindow(QMainWindow):
         plot_tab_layout.addWidget(controls)
         self.workspace_summary = self._build_workspace_summary()
         plot_tab_layout.addWidget(self.workspace_summary)
+        self.plot_tab = plot_tab
         self.tabs.addTab(plot_tab, "Grafik")
 
         # --- User-entered interval statistics tab ---
@@ -4504,6 +4587,7 @@ class MainWindow(QMainWindow):
         self.lbl_fft_info.setWordWrap(True)
         self.lbl_fft_info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         fft_layout.addWidget(self.lbl_fft_info)
+        self.fft_tab = fft_tab
 
         fft_panel = QFrame()
         fft_panel.setObjectName("fftPanel")
@@ -4522,7 +4606,10 @@ class MainWindow(QMainWindow):
         self.fs_fft.setDecimals(6)
         self.fs_fft.setValue(0.0)
         self.fs_fft.setKeyboardTracking(False)
-        self.fs_fft.setToolTip("0 = zaman ekseninden otomatik. Gerekirse Fs'yi manuel girin.")
+        self.fs_fft.setToolTip(
+            "0 = Fs zaman ekseninden otomatik hesaplanır. "
+            "0'dan büyük bir değer girerseniz bu değer zaman ekseni tahminine göre öncelikli kullanılır."
+        )
         self.btn_fft = QPushButton("FFT Hesapla")
         self.btn_fft.setProperty("primary", True)
         self.btn_fft_clear = QPushButton("FFT Temizle")
@@ -5359,7 +5446,7 @@ class MainWindow(QMainWindow):
             self._lazy_view_timer.stop()
         except Exception:
             pass
-        self._cancel_jobs(["index", "preview", "load", "lazy_view", "filter", "fft"])
+        self._cancel_jobs(["index", "preview", "load", "lazy_view", "filter", "fft", "range_stats"])
         for th, _worker, _tag in list(self._jobs):
             try:
                 th.quit()
@@ -5378,14 +5465,17 @@ class MainWindow(QMainWindow):
     def open_tdms(self) -> None:
         last_dir = str(self.settings.value("paths/last_dir", "") or "")
         start_dir = last_dir if (last_dir and os.path.isdir(last_dir)) else ""
-        path, _ = QFileDialog.getOpenFileName(self, "TDMS Aç", start_dir, "TDMS (*.tdms)")
-        if not path:
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "TDMS Aç", start_dir, "TDMS (*.tdms);;Tüm dosyalar (*)",
+        )
+        paths = [p for p in (paths or []) if p]
+        if not paths:
             return
         try:
-            self.settings.setValue("paths/last_dir", os.path.dirname(path))
+            self.settings.setValue("paths/last_dir", os.path.dirname(paths[0]))
         except Exception:
-            pass
-        self.open_tdms_path(path)
+            logger.debug("Last directory could not be stored", exc_info=True)
+        self.open_tdms_paths(paths)
 
     def open_tdms_paths(self, paths: List[str]) -> None:
         for p in paths:
@@ -5659,7 +5749,7 @@ class MainWindow(QMainWindow):
         lay.addLayout(row)
         self.btn_channel_manager_apply.clicked.connect(self._apply_channel_manager)
         self.btn_channel_manager_refresh.clicked.connect(self._populate_channel_manager)
-        self.btn_channel_manager_back.clicked.connect(lambda: self.tabs.setCurrentIndex(0))
+        self.btn_channel_manager_back.clicked.connect(self._show_plot_tab)
         self.channel_manager_search.textChanged.connect(self._filter_channel_manager)
         return tab
 
@@ -5754,7 +5844,14 @@ class MainWindow(QMainWindow):
             vis = tree.itemWidget(it, 0); name = tree.itemWidget(it, 3); fsbox = tree.itemWidget(it, 4); man = tree.itemWidget(it, 5); unit = tree.itemWidget(it, 7); axis = tree.itemWidget(it, 8); cbtn = tree.itemWidget(it, 9)
             st["visible"] = bool(vis.isChecked()) if isinstance(vis, QCheckBox) else True
             if isinstance(name, QLineEdit): st["display_name"] = name.text().strip()
-            if isinstance(unit, QLineEdit): st["unit_override"] = unit.text().strip()
+            if isinstance(unit, QLineEdit):
+                # An emptied field means "use the TDMS unit again", so the
+                # override is removed instead of stored as a blank string.
+                unit_text = unit.text().strip()
+                if unit_text:
+                    st["unit_override"] = unit_text
+                else:
+                    st.pop("unit_override", None)
             if isinstance(axis, QComboBox): st["axis"] = {"Sol":"left","Sağ":"right"}.get(axis.currentText(), "auto")
             if isinstance(cbtn, QPushButton) and cbtn.property("channel_rgb") is not None: st["color"] = tuple(cbtn.property("channel_rgb"))
             self.style_map[skey] = st
@@ -6085,7 +6182,17 @@ class MainWindow(QMainWindow):
         self.lbl_range_stats_summary.setText("Aralık istatistikleri hesaplanıyor...")
         self.status.showMessage("Aralık istatistikleri hesaplanıyor...")
         worker = RangeStatsWorker(token, requests, x0, x1)
-        self._start_job(worker, self._on_range_stats_ready, tag="range_stats", cancel_tags=["range_stats"])
+        self._start_job(
+            worker, self._on_range_stats_ready,
+            self._on_range_stats_failed,
+            tag="range_stats", cancel_tags=["range_stats"],
+        )
+
+    def _on_range_stats_failed(self, msg: str) -> None:
+        """Re-enable the calculate button so a failed run does not lock the tab."""
+        self.btn_range_stats_calc.setEnabled(True)
+        self.lbl_range_stats_summary.setText("Aralık istatistikleri hesaplanamadı.")
+        self._on_worker_failed(msg)
 
     @staticmethod
     def _fmt_stat(value: Any) -> str:
@@ -6096,9 +6203,12 @@ class MainWindow(QMainWindow):
             return "—"
 
     def _on_range_stats_ready(self, payload: dict) -> None:
-        if payload.get("cancelled") or payload.get("token") != self._range_stats_token:
+        if payload.get("token") != self._range_stats_token:
             return
         self.btn_range_stats_calc.setEnabled(True)
+        if payload.get("cancelled"):
+            self.lbl_range_stats_summary.setText("Aralık istatistikleri iptal edildi.")
+            return
         rows = payload.get("rows") or []
         self.range_stats_tree.setUpdatesEnabled(False)
         try:
@@ -6198,7 +6308,7 @@ class MainWindow(QMainWindow):
         self.btn_manual_fs_clear_all.clicked.connect(self._clear_manual_fs_table)
         self.btn_manual_fs_preset_save.clicked.connect(self._save_manual_fs_preset)
         self.btn_manual_fs_preset_load.clicked.connect(self._load_manual_fs_preset)
-        self.btn_manual_fs_back.clicked.connect(lambda: self.tabs.setCurrentIndex(0))
+        self.btn_manual_fs_back.clicked.connect(self._show_plot_tab)
         self.manual_fs_search.textChanged.connect(self._filter_manual_fs_table)
         return tab
 
@@ -6905,8 +7015,8 @@ class MainWindow(QMainWindow):
             ss = dict(s)
             if st.get("display_name"):
                 ss["name"] = st["display_name"]
-            if "unit_override" in st:
-                ss["unit"] = st.get("unit_override", "")
+            if st.get("unit_override"):
+                ss["unit"] = st["unit_override"]
             prepared.append(ss)
 
         stacked_active = self.cmb_plot_mode.currentText().strip().lower() == "stacked"
@@ -6981,13 +7091,30 @@ class MainWindow(QMainWindow):
         self.cmb_style_series.clear()
         self.shift_series_tree.clear()
         self.clear_markers()
+
+        # Drop the cached render payload as well; otherwise switching between
+        # Overlay and Stacked would redraw the channels that were just cleared.
+        self._last_display_series = []
+        self._last_axis_mode = "numeric"
+        self._last_x_label = "X"
+        self._zoom_history.clear()
+        self._lazy_view_pending = None
+        try:
+            self._lazy_view_timer.stop()
+        except Exception:
+            logger.debug("Lazy view timer could not be stopped", exc_info=True)
+        self._cancel_jobs(["load", "lazy_view", "filter", "range_stats"])
+        self._channel_manager_dirty = True
+        self._calculated_tab_dirty = True
+        self._on_workspace_tab_changed(self.tabs.currentIndex())
+
         self._refresh_statistics()
         self._update_workspace_summary()
         try:
             self._clear_range_stats_results()
             self.lbl_range_stats_axis.setText("X ekseni: —")
         except Exception:
-            pass
+            logger.debug("Range statistics could not be reset", exc_info=True)
 
     # ----- Range -----
 
@@ -7444,9 +7571,11 @@ class MainWindow(QMainWindow):
         if not preprocess:
             preprocess.append("ham sinyal")
 
+        fs_source = str(p.get("fs_source", "") or "").strip()
+        fs_text = f"{p['fs']:.6g} Hz" + (f" ({fs_source})" if fs_source else "")
         info = [
             f"<b>Kanal:</b> {p['name']}",
-            f"<b>Örnekleme:</b> {p['fs']:.6g} Hz &nbsp; <b>N:</b> {p['n']} &nbsp; <b>Çözünürlük:</b> {p['df']:.6g} Hz",
+            f"<b>Örnekleme:</b> {fs_text} &nbsp; <b>N:</b> {p['n']} &nbsp; <b>Çözünürlük:</b> {p['df']:.6g} Hz",
             f"<b>Ön İşleme:</b> {', '.join(preprocess)}",
             f"<b>Gösterilen aralık:</b> {shown_fmin:.6g}\u2013{shown_fmax:.6g} Hz &nbsp; <b>Ölçek:</b> {ylab}",
             f"<b>{peak_text}</b>",
@@ -7493,7 +7622,9 @@ class MainWindow(QMainWindow):
             return
         self._last_fft_payload = p
         self._render_fft_payload(p)
-        self.tabs.setCurrentIndex(1)
+        tab = getattr(self, "fft_tab", None)
+        if tab is not None:
+            self.tabs.setCurrentWidget(tab)
 
     # ----- Drag & Drop -----
 
@@ -7530,11 +7661,47 @@ class MainWindow(QMainWindow):
 # Entry point
 # ===================================================================
 
+def _install_excepthook() -> None:
+    """Log unhandled exceptions instead of letting Qt terminate silently."""
+    previous = sys.excepthook
+
+    def _hook(exc_type: type, exc: BaseException, tb: Any) -> None:
+        if issubclass(exc_type, KeyboardInterrupt):
+            previous(exc_type, exc, tb)
+            return
+        logger.error("Beklenmeyen hata", exc_info=(exc_type, exc, tb))
+        try:
+            if QApplication.instance() is not None:
+                QMessageBox.critical(
+                    None, "Beklenmeyen Hata",
+                    f"İşlem tamamlanamadı:\n{exc}\n\n"
+                    "Uygulama açık kalmaya devam eder. Ayrıntılar günlüğe yazıldı.",
+                )
+        except Exception:
+            logger.debug("Hata diyalogu gösterilemedi", exc_info=True)
+
+    sys.excepthook = _hook
+
+
 def main() -> None:
     app = QApplication(sys.argv)
+    app.setApplicationName("TDMSReader")
+    app.setOrganizationName(CFG.settings_org)
+    _install_excepthook()
+
+    app_icon = resolve_application_icon()
+    if not app_icon.isNull():
+        app.setWindowIcon(app_icon)
+
     app.setStyleSheet(LIGHT_QSS)
     w = MainWindow()
     w.show()
+
+    # Any TDMS paths passed on the command line open straight away.
+    cli_paths = [p for p in sys.argv[1:] if p.lower().endswith(".tdms") and os.path.isfile(p)]
+    if cli_paths:
+        w.open_tdms_paths(cli_paths)
+
     sys.exit(app.exec())
 
 
