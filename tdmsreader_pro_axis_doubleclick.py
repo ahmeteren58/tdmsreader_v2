@@ -2677,11 +2677,12 @@ class PlotPane(QWidget):
 
             self._right_data_bounds = (min(right_mins), max(right_maxs)) if right_mins else None
             vb = self.plot.getViewBox()
-            try:
-                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
-                vb.autoRange()
-            except Exception:
-                self.plot.enableAutoRange()
+            with self._unclipped_items():
+                try:
+                    vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+                    vb.autoRange()
+                except Exception:
+                    self.plot.enableAutoRange()
 
             if self._right_vb is not None:
                 if self._right_y_lock_enabled:
@@ -2733,23 +2734,53 @@ class PlotPane(QWidget):
 
     # ----- Autofit / range -----
 
+    @contextmanager
+    def _unclipped_items(self) -> Any:
+        """Expose full data bounds while clip-to-view is temporarily suspended.
+
+        pyqtgraph caches a display dataset clipped to the current view whenever
+        auto-range is off, so ``autoRange`` and ``getData`` would otherwise only
+        ever see the slice that is already visible and could never grow the view.
+        """
+        touched: List[pg.PlotDataItem] = []
+        for it in list(self._left_items) + list(self._right_items):
+            if it is None:
+                continue
+            try:
+                if not it.opts.get("clipToView"):
+                    continue
+                it.setClipToView(False)
+            except Exception:
+                logger.debug("Clip-to-view could not be suspended", exc_info=True)
+                continue
+            touched.append(it)
+        try:
+            yield
+        finally:
+            for it in touched:
+                try:
+                    it.setClipToView(True)
+                except Exception:
+                    logger.debug("Clip-to-view could not be restored", exc_info=True)
+
     def autofit_all(self) -> None:
         if self.plot is None:
             return
         vb = self.plot.getViewBox()
-        try:
-            vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
-            vb.autoRange()
-        except Exception:
-            self.plot.enableAutoRange()
-
-        if self._right_vb is not None:
+        with self._unclipped_items():
             try:
-                self._right_vb.enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
-                self._right_vb.autoRange()
-                self._right_vb.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
+                vb.enableAutoRange(axis=pg.ViewBox.XYAxes, enable=True)
+                vb.autoRange()
             except Exception:
-                pass
+                self.plot.enableAutoRange()
+
+            if self._right_vb is not None:
+                try:
+                    self._right_vb.enableAutoRange(axis=pg.ViewBox.YAxis, enable=True)
+                    self._right_vb.autoRange()
+                    self._right_vb.enableAutoRange(axis=pg.ViewBox.YAxis, enable=False)
+                except Exception:
+                    pass
 
         try:
             self._base_left_yrange = tuple(vb.viewRange()[1])
@@ -2773,7 +2804,9 @@ class PlotPane(QWidget):
         if self.plot is None:
             return
         if x_max > x_min:
-            self.plot.setXRange(x_min, x_max, padding=0.01)
+            # Padding here would compound on every range restore and make the
+            # lazy view re-read a slightly wider window forever.
+            self.plot.setXRange(x_min, x_max, padding=0.0)
         self._enforce_y_lock()
         self._enforce_right_y_lock()
 
@@ -2827,18 +2860,19 @@ class PlotPane(QWidget):
             pad = (y1 - y0) * 0.05 if y1 != y0 else 1.0
             return y0 - pad, y1 + pad
 
-        rng = _fit_items(self._left_items)
-        if rng is not None:
-            self.plot.setYRange(*rng, padding=0.0)
+        with self._unclipped_items():
+            left_rng = _fit_items(self._left_items)
+            right_rng = _fit_items(self._right_items) if self._right_vb is not None else None
+
+        if left_rng is not None:
+            self.plot.setYRange(*left_rng, padding=0.0)
             if self._y_lock_enabled:
                 self._y_lock_left = tuple(self.plot.getViewBox().viewRange()[1])
 
-        if self._right_vb is not None and self._right_items:
-            rng = _fit_items(self._right_items)
-            if rng is not None:
-                self._right_vb.setYRange(*rng, padding=0.0)
-                if self._right_y_lock_enabled:
-                    self._right_y_lock_range = rng
+        if self._right_vb is not None and right_rng is not None:
+            self._right_vb.setYRange(*right_rng, padding=0.0)
+            if self._right_y_lock_enabled:
+                self._right_y_lock_range = right_rng
 
     # ----- Markers -----
 
