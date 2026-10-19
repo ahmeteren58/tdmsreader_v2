@@ -1,0 +1,917 @@
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/DEGISIKLIKLER_281.md 2.8.1/DEGISIKLIKLER_281.md
+--- 2.8.0/DEGISIKLIKLER_281.md	1970-01-01 00:00:00.000000000 +0000
++++ 2.8.1/DEGISIKLIKLER_281.md	2026-10-19 07:41:40.528059394 +0000
+@@ -0,0 +1,39 @@
++# 2.8.1 — Arayüz düzenlemesi
++
++Yalnız görünüm ve yerleşim. Hesap, zaman eşleme, okuma ve dışa aktarma kodu
++2.8.0 ile aynıdır.
++
++## Tema
++
++- `tdms_theme.py` (yeni): açık ve koyu tema tek bir renk paletinden üretilir.
++  Önceki dört ayrı stil katmanı ile `presentation_qss` kaldırıldı; yeşil, mavi
++  ve camgöbeği karışık vurgular yerine tek bir mühendislik mavisi kullanılır.
++- Nötr gri pencere zemini, beyaz paneller, 3–4 px köşe, ince 1 px çizgiler.
++  Butonlar, giriş alanları, sekmeler, tablo başlıkları, menüler, kaydırma
++  çubukları ve durum çubuğu aynı ölçü ve renk kurallarını izler.
++- Onay kutuları ve radyo düğmeleri iki temada da belirgin; kanal ağacında
++  kısmi seçim (–) ayrı gösterilir. Ağaç dalları ok ikonlarıyla açılır.
++- Uyarı bildirimleri (eski ofsetler, vana uyarıları) aynı sarı tonla,
++  sonuç kartları sol vurgu çizgisiyle gösterilir.
++- Grafik eksenleri saf siyah/beyaz yerine yumuşak gri çizgi ve okunur
++  etiketlerle çizilir. Koyu temada grafik zemini siyah yerine koyu antrasittir.
++  Vana Analizi ve Basınç Kaybı grafikleri aynı renkleri kullanır.
++
++## Şerit (ribbon)
++
++- **Proje** artık **Dosya** grubunda, **Kalite** (Veri Kalitesi) **Ölçüm**
++  grubunda; grupsuz buton kalmadı.
++- İki satıra bölünüp kırpılan etiketler tek satır: **Görüntü** (grafiği
++  PNG/SVG kaydet), **Kalite**. Overlay/Stacked seçimi **Düzen** adını aldı;
++  son grup **Pencere** oldu (iki ayrı "Görünüm" karışıklığı giderildi).
++- Bütün şerit butonları aynı boyutta; açıklamalar araç ipuçlarında.
++
++## Küçük düzeltmeler
++
++- Detay Ayarları çekmecesindeki kapatma işareti bazı fontlarda nokta olarak
++  görünüyordu; ikonla değiştirildi. Çekmece sekmelerinde gri zemin taşması
++  giderildi.
++- Dosya sekmesi kapatma düğmesi kırmızı kare yerine sade × ikonu.
++- İmleç okuması ve Arka Plan Rengi düğmesi diğer kontrollerle aynı biçimde.
++
++Yeni ikonlar: `close.svg`, `dash_white.svg` (açık/koyu).
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/icons/ASSETS.md 2.8.1/icons/ASSETS.md
+--- 2.8.0/icons/ASSETS.md	2026-10-19 07:41:40.512059255 +0000
++++ 2.8.1/icons/ASSETS.md	2026-10-19 07:41:40.520059325 +0000
+@@ -7,3 +7,5 @@
+ 2.2.0: `project.svg` ve `quality.svg` açık/koyu varyantları aynı özgün vektör ailesine eklendi. Üçüncü taraf ikon alınmadı.
+ 
+ 2.8.0: chart, channels, clock, valve, gauge, statistics, wave, formula, info, check, refresh, reset, clear, stop ve primary action ikonları uygulama için özgün SVG olarak çizildi. Açık/koyu tema varyantları yereldir; ek bağımlılık veya ağ bağlantısı gerekmez.
++
++2.8.1: close ve dash_white ikonları aynı özgün vektör ailesine eklendi (açık/koyu). Üçüncü taraf ikon alınmadı.
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/icons/dark/close.svg 2.8.1/icons/dark/close.svg
+--- 2.8.0/icons/dark/close.svg	1970-01-01 00:00:00.000000000 +0000
++++ 2.8.1/icons/dark/close.svg	2026-10-19 07:41:40.524059359 +0000
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#b7c9da" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 7L7 17"/></svg>
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/icons/dark/dash_white.svg 2.8.1/icons/dark/dash_white.svg
+--- 2.8.0/icons/dark/dash_white.svg	1970-01-01 00:00:00.000000000 +0000
++++ 2.8.1/icons/dark/dash_white.svg	2026-10-19 07:41:40.524059359 +0000
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"><path d="M7 12h10"/></svg>
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/icons/light/close.svg 2.8.1/icons/light/close.svg
+--- 2.8.0/icons/light/close.svg	1970-01-01 00:00:00.000000000 +0000
++++ 2.8.1/icons/light/close.svg	2026-10-19 07:41:40.524059359 +0000
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#4c6074" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 7L7 17"/></svg>
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/icons/light/dash_white.svg 2.8.1/icons/light/dash_white.svg
+--- 2.8.0/icons/light/dash_white.svg	1970-01-01 00:00:00.000000000 +0000
++++ 2.8.1/icons/light/dash_white.svg	2026-10-19 07:41:40.524059359 +0000
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"><path d="M7 12h10"/></svg>
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/README_TR.md 2.8.1/README_TR.md
+--- 2.8.0/README_TR.md	2026-10-19 07:41:40.508059220 +0000
++++ 2.8.1/README_TR.md	2026-10-19 07:41:40.520059325 +0000
+@@ -1,4 +1,11 @@
+-# TDMSReader Pro 2.8.0
++# TDMSReader Pro 2.8.1
++
++## 2.8.1: Arayüz düzenlemesi
++
++- Açık ve koyu tema tek palette toplandı (`tdms_theme.py`); tek vurgu rengi,
++  sade çizgiler, belirgin onay kutuları ve yumuşak grafik eksenleri.
++- Şeritte bütün komutlar gruplu ve tek satır etiketli. Ayrıntı:
++  `DEGISIKLIKLER_281.md`. Hesaplama ve zaman eşleme davranışı değişmedi.
+ 
+ ## 2.8.0: Sade çalışma alanı
+ 
+@@ -122,7 +129,7 @@
+ 
+ ## Güncelleme
+ 
+-Uygulamayı kapatın, ZIP'i **yeni bir klasöre tamamen çıkartın**. Bütün `tdms_*.py` modülleri ve `icons` klasörü birlikte bulunmalıdır; yalnız ana Python dosyasını değiştirmeyin. `baslat_windows.bat` ile kaynak sürümü açın; pencere başlığında **2.8.0** yazmalıdır. Eski EXE, kaynak dosyaları değiştirmekle güncellenmez; aşağıdaki komutla yeniden oluşturulmalıdır.
++Uygulamayı kapatın, ZIP'i **yeni bir klasöre tamamen çıkartın**. Bütün `tdms_*.py` modülleri ve `icons` klasörü birlikte bulunmalıdır; yalnız ana Python dosyasını değiştirmeyin. `baslat_windows.bat` ile kaynak sürümü açın; pencere başlığında **2.8.1** yazmalıdır. Eski EXE, kaynak dosyaları değiştirmekle güncellenmez; aşağıdaki komutla yeniden oluşturulmalıdır.
+ 
+ ## Zaman hesabı
+ 
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/tdms_presentation.py 2.8.1/tdms_presentation.py
+--- 2.8.0/tdms_presentation.py	2026-10-19 07:41:40.516059290 +0000
++++ 2.8.1/tdms_presentation.py	2026-10-19 07:41:40.528059394 +0000
+@@ -1,6 +1,5 @@
+ """Presentation only: navigation, help, empty states and theme-aware actions."""
+ from __future__ import annotations
+-from pathlib import Path
+ from PyQt6.QtCore import Qt,QEvent,QSize,QLocale
+ from PyQt6.QtGui import QColor
+ from PyQt6.QtWidgets import (QFrame,QWidget,QLabel,QToolButton,QPushButton,
+@@ -28,49 +27,6 @@
+     return heading,button,detail
+ 
+ 
+-def presentation_qss(theme):
+-    dark=theme=='dark'
+-    assets=(Path(__file__).resolve().parent/'icons'/('dark' if dark else 'light')).as_posix()
+-    bg,surface,text,muted,line,hover,selected,accent=('#111827','#18212e','#e6edf5','#9caebf','#303d4e','#223044','#253c58','#7db6ff') if dark else ('#f4f6f8','#ffffff','#243447','#65768a','#dfe5eb','#f0f4f8','#eaf2fd','#2164b5')
+-    return f'''
+-    QMainWindow, QWidget#appRoot {{ background: {bg}; }}
+-    QLabel[pageTitle="true"] {{ color: {text}; font-size: 18px; font-weight: 600; padding: 0; }}
+-    QLabel[pageHelp="true"] {{ background: {hover}; color: {muted}; border: 1px solid {line}; border-radius: 5px; padding: 9px 12px; }}
+-    QLabel[muted="true"] {{ color: {muted}; }}
+-    QToolButton[helpButton="true"] {{ background: transparent; border: none; padding: 3px; color: {muted}; }}
+-    QToolButton[helpButton="true"]:hover, QToolButton[helpButton="true"]:checked {{ background: {selected}; }}
+-    QTabWidget#workspaceTabs::pane {{ border: 1px solid {line}; border-radius: 5px; background: {surface}; }}
+-    QTabBar#workspaceTabBar::tab {{ color: {muted}; background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 9px 6px; margin: 0; font-weight: 400; }}
+-    QTabBar#workspaceTabBar::tab:hover {{ background: {hover}; color: {text}; }}
+-    QTabBar#workspaceTabBar::tab:selected {{ color: {accent}; border-bottom: 2px solid {accent}; background: {surface}; font-weight: 600; }}
+-    QTabBar QToolButton {{ padding: 0; border-radius: 0; width: 20px; }}
+-    QFrame#ribbonBar {{ border: 1px solid {line}; background: {surface}; border-radius: 5px; }}
+-    QToolButton[ribbon="1"] {{ font-size: 11px; font-weight: 500; padding: 3px; border-radius: 4px; }}
+-    QFrame#sidePanel, QFrame#workspacePanel {{ border-radius: 5px; }}
+-    QPushButton {{ border-radius: 4px; padding: 5px 9px; font-weight: 400; }}
+-    QPushButton[primary="true"] {{ background: #2164b5; border-color: #2164b5; color: #ffffff; font-weight: 600; }}
+-    QPushButton[primary="true"]:hover {{ background: #1b559c; border-color: #1b559c; }}
+-    QPushButton[primary="true"]:disabled {{ background: {hover}; border-color: {line}; color: {muted}; }}
+-    QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ border-radius: 4px; }}
+-    QComboBox {{ padding-right: 22px; }}
+-    QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border: none; background: transparent; }}
+-    QComboBox::down-arrow {{ image: url("{assets}/chevron_down.svg"); width: 10px; height: 10px; }}
+-    QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 16px; border: none; border-left: 1px solid {line}; background: transparent; }}
+-    QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 16px; border: none; border-left: 1px solid {line}; background: transparent; }}
+-    QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{assets}/chevron_up.svg"); width: 8px; height: 8px; }}
+-    QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{assets}/chevron_down.svg"); width: 8px; height: 8px; }}
+-    QTreeWidget {{ border-radius: 4px; }}
+-    QTreeWidget::item {{ padding: 5px 4px; }}
+-    QHeaderView::section {{ font-weight: 600; padding: 7px 5px; border-right: none; border-bottom: 1px solid {line}; }}
+-    QGroupBox {{ border-radius: 5px; }}
+-    QFrame#legacyOffsets {{ background: {hover}; border: 1px solid {line}; border-radius: 5px; }}
+-    QFrame#plotEmptyState {{ background: {surface}; border: none; }}
+-    QLabel#emptyTitle {{ color: {text}; font-size: 22px; font-weight: 600; }}
+-    QLabel#emptySubtitle {{ color: {muted}; font-size: 12px; }}
+-    QLabel#emptyMark {{ color: {accent}; font-size: 34px; }}
+-    '''
+-
+-
+ class EmptyPlotState(QFrame):
+     def __init__(self,parent,open_file):
+         super().__init__(parent);self.setObjectName('plotEmptyState')
+@@ -114,8 +70,7 @@
+             self.tabs.setTabText(index,label);self.tabs.setTabToolTip(index,full)
+         self.tabs.setCurrentWidget(active)
+         # Reuse existing actions and signals; no plot implementation changes.
+-        for b in self.ribbon.findChildren(QToolButton):
+-            if b.property('ribbon')=='1':b.setFixedSize(68,54)
++        self._polish_ribbon()
+         # QScrollArea owns the ribbon through its viewport.
+         parent=self.ribbon.parentWidget()
+         while parent and not hasattr(parent,'setWidgetResizable'):parent=parent.parentWidget()
+@@ -136,6 +91,7 @@
+             'time_check':'check','time_apply':'check_white','time_reset':'reset',
+             'valve_run':'play_white','valve_stop':'stop','valve_csv':'export_csv',
+             'steady_run':'play_white','steady_stop':'stop','steady_csv':'export_csv',
++            'btn_details_close':'close',
+         }.items():
+             button=getattr(self,attr,None)
+             if button is not None:button.setProperty('ui_icon',icon+'.svg')
+@@ -143,6 +99,33 @@
+             widget.style().unpolish(widget);widget.style().polish(widget);widget.update()
+         self._presentation_theme();self._presentation_sync()
+ 
++    def _polish_ribbon(self):
++        direct=Qt.FindChildOption.FindDirectChildrenOnly
++        groups={}
++        for group in self.ribbon.findChildren(QFrame,options=direct):
++            caption=group.findChild(QLabel)
++            if group.objectName()=='ribbonGroup' and caption is not None:groups[caption.text()]=(group,caption)
++        loose={b.accessibleName():b for b in self.ribbon.findChildren(QToolButton,options=direct) if b.property('ribbon')=='1'}
++        for name,title,index in (('Proje','Dosya',0),('Veri Kalitesi','İşaretleme & Ölçüm',-1)):
++            button,entry=loose.get(name),groups.get(title)
++            if button is None or entry is None:continue
++            self.ribbon.layout().removeWidget(button)
++            entry[0].layout().itemAt(0).layout().insertWidget(index,button)
++        captions={'İşaretleme & Ölçüm':'Ölçüm','Görünüm':'Pencere'}
++        for title,(_,caption) in groups.items():caption.setText(captions.get(title,title))
++        labels={'Kaydet':('Görüntü','Grafiği görüntü olarak kaydet (PNG / SVG)'),
++                'Veri Kalitesi':('Kalite','Veri kalitesi: veri türleri, Fs kaynağı ve eksik örnekler'),
++                'Görünüm':('Düzen','Grafik düzeni: Overlay / Stacked'),
++                'Marker':('İşaret','Tıklayarak grafik üzerine işaret ekle'),
++                'Ölçüm':('A/B Ölçüm','A/B imleçleri ile aralık ölçümü'),
++                'Ayır':('Ayır','Grafiği ayrı pencerede aç'),
++                'Ayarlar':('Ayarlar','Grafik detay ayarları çekmecesini aç / kapat')}
++        for b in self.ribbon.findChildren(QToolButton):
++            if b.property('ribbon')!='1':continue
++            text,tip=labels.get(b.accessibleName(),(None,None))
++            if text:b.setText(text);b.setToolTip(tip)
++            b.setFixedSize(66,54)
++
+     def _presentation_theme(self):
+         if not hasattr(self,'_presentation_icons'):return
+         for i,(_,_,_,name) in enumerate(self._presentation_pages):self.tabs.setTabIcon(i,self._presentation_icons(name))
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/tdmsreader.py 2.8.1/tdmsreader.py
+--- 2.8.0/tdmsreader.py	2026-10-19 07:41:40.516059290 +0000
++++ 2.8.1/tdmsreader.py	2026-10-19 07:41:40.528059394 +0000
+@@ -1,5 +1,5 @@
+ """
+-TDMSReader Pro 2.8.0 — NI TDMS dosyaları için PyQt6 / PyQtGraph görüntüleyici.
++TDMSReader Pro 2.8.1 — NI TDMS dosyaları için PyQt6 / PyQtGraph görüntüleyici.
+ 
+ Bu revizyonun başlıca değişiklikleri:
+ - Donmayan arka plan işleri, bayt aralığıyla TDMS okuma, piksel bütçeli çizim.
+@@ -228,7 +228,8 @@
+ from tdms_jobs import JobThread
+ from tdms_alignment import ChannelAlignmentManager, display_time_shift
+ from tdms_alignment_ui import AlignmentMixin
+-from tdms_presentation import PresentationMixin, FrequencyEditor, page_header, presentation_qss
++from tdms_presentation import PresentationMixin, FrequencyEditor, page_header
++from tdms_theme import build_qss, qt_palette_colors, axis_colors, PLOT_BACKGROUND
+ from tdms_time_channels import TimeChannelResolver, discover as discover_time_channels
+ from tdms_time_channels_ui import TimeChannelsMixin
+ from tdms_steady_ui import SteadyFlowMixin
+@@ -240,7 +241,7 @@
+ from tdms_ui import CsvExportDialog
+ from tdms_axes import AxisRangeDialog, validate_ranges
+ 
+-__version__ = "2.8.0"
++__version__ = "2.8.1"
+ 
+ 
+ # ---------------------------------------------------------------------------
+@@ -332,245 +333,14 @@
+ # Theme QSS
+ # ===================================================================
+ 
+-LIGHT_QSS = """
+-QMainWindow { background: #F6F7F9; }
+-QLabel { color: #222; }
+-QLabel:disabled { color: #9AA3B2; }
+-QTabWidget::pane { border: 1px solid #D7DBE0; border-radius: 12px; background: #FFFFFF; }
+-QTabBar::tab { padding: 8px 12px; margin: 2px; border-radius: 9px; background: #EEF1F4; color: #222; }
+-QTabBar::tab:selected { background: #FFFFFF; border: 1px solid #D7DBE0; }
+-QGroupBox { border: 1px solid #D7DBE0; border-radius: 12px; margin-top: 14px; background: #FFFFFF; }
+-QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #222; font-weight: 600; }
+-QPushButton, QToolButton { border: 1px solid #C9CED6; border-radius: 9px; padding: 7px 12px; background: #FFFFFF; color: #000; }
+-QPushButton:hover, QToolButton:hover { background: #F1F3F6; }
+-QPushButton:pressed, QToolButton:pressed { background: #E9ECF0; }
+-QPushButton[primary="true"] { background: #2ECC71; border-color: #26B863; color: white; font-weight: 700; }
+-QPushButton[primary="true"]:hover { background: #29C46B; }
+-QPushButton[danger="true"] { background: #E74C3C; border-color: #D94435; color: white; font-weight: 700; }
+-QPushButton[danger="true"]:hover { background: #DE4637; }
+-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { border: 1px solid #C9CED6; border-radius: 9px; padding: 5px 8px; background: #FFFFFF; selection-background-color: #e3ddff; }
+-QTreeWidget { border: 1px solid #D7DBE0; border-radius: 12px; background: #FFFFFF; }
+-QHeaderView::section { background: #F1F3F6; padding: 6px; border: none; border-right: 1px solid #D7DBE0; color: #222; font-weight: 600; }
+-QCheckBox, QRadioButton { spacing: 8px; }
+-QStatusBar { background: #FFFFFF; border-top: 1px solid #D7DBE0; }
+-QFrame#plotQuickbar { background: rgba(255,255,255,0.70); border: 1px solid #D7DBE0; border-radius: 14px; }
+-QToolButton[qb="1"] { border: 1px solid #C9CED6; border-radius: 12px; padding: 0px; background: #FFFFFF; }
+-QToolButton[qb="1"]:hover { background: #F1F3F6; }
+-QToolButton[qb="1"]:pressed { background: #E9ECF0; }
+-QToolButton[qb="1"]:checked { background: #E7F0FF; border: 1px solid #4C8DFF; }
+-QToolButton[qb="1"]:checked:hover { background: #DCEAFF; }
+-QToolButton[qb="1"]:disabled { background: #F5F6F8; color: #9AA3B2; border-color: #D7DBE0; }
+-QFrame#controlsDock { border: 1px solid #D7DBE0; border-radius: 12px; background: #FFFFFF; }
+-QFrame#controlsHeader { background: #EEF1F4; border-bottom: 1px solid #D7DBE0; border-top-left-radius: 12px; border-top-right-radius: 12px; }
+-QToolButton#btnCtrlCollapse { border: 1px solid #C9CED6; border-radius: 9px; padding: 6px 10px; background: #FFFFFF; font-weight: 800; text-align: left; }
+-QToolButton#btnCtrlCollapse:hover { background: #F1F3F6; }
+-QToolButton#btnCtrlCollapse:pressed { background: #E9ECF0; }
+-QProgressBar { border: 1px solid #C9CED6; border-radius: 6px; background: #F1F3F6; text-align: center; }
+-QProgressBar::chunk { background: #2ECC71; border-radius: 5px; }
+-QMenuBar { background: #F6F7F9; border-bottom: 1px solid #D7DBE0; padding: 2px; }
+-QMenuBar::item { padding: 6px 12px; border-radius: 6px; color: #222; }
+-QMenuBar::item:selected { background: #EEF1F4; }
+-QMenuBar::item:pressed { background: #E9ECF0; }
+-QMenu { background: #FFFFFF; border: 1px solid #D7DBE0; border-radius: 8px; padding: 4px; }
+-QMenu::item { padding: 6px 28px 6px 12px; border-radius: 4px; color: #222; }
+-QMenu::item:selected { background: #EEF1F4; }
+-QMenu::separator { height: 1px; background: #D7DBE0; margin: 4px 8px; }
+-"""
+-
+-DARK_QSS = """
+-QMainWindow { background: #0F1115; }
+-QLabel { color: #E8EAF0; }
+-QLabel:disabled { color: #7F889B; }
+-QTabWidget::pane { border: 1px solid #2A2F3A; border-radius: 12px; background: #141824; }
+-QTabBar::tab { padding: 8px 12px; margin: 2px; border-radius: 9px; background: #1D2230; color: #E8EAF0; }
+-QTabBar::tab:selected { background: #141824; border: 1px solid #2A2F3A; }
+-QGroupBox { border: 1px solid #2A2F3A; border-radius: 12px; margin-top: 14px; background: #141824; color: #E8EAF0; }
+-QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 6px; color: #E8EAF0; font-weight: 600; }
+-QPushButton, QToolButton { border: 1px solid #3A4253; border-radius: 9px; padding: 7px 12px; background: #1A2030; color: #E8EAF0; }
+-QPushButton:hover, QToolButton:hover { background: #222A3D; }
+-QPushButton:pressed, QToolButton:pressed { background: #2A3550; }
+-QPushButton[primary="true"] { background: #2ECC71; border-color: #26B863; color: white; font-weight: 700; }
+-QPushButton[primary="true"]:hover { background: #29C46B; }
+-QPushButton[danger="true"] { background: #E74C3C; border-color: #D94435; color: white; font-weight: 700; }
+-QPushButton[danger="true"]:hover { background: #DE4637; }
+-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { border: 1px solid #3A4253; border-radius: 9px; padding: 5px 8px; background: #101624; color: #E8EAF0; selection-background-color: #2C3A5C; }
+-QTreeWidget { border: 1px solid #2A2F3A; border-radius: 12px; background: #101624; color: #E8EAF0; }
+-QHeaderView::section { background: #1A2030; padding: 6px; border: none; border-right: 1px solid #2A2F3A; color: #E8EAF0; font-weight: 600; }
+-QCheckBox, QRadioButton { spacing: 8px; color: #E8EAF0; }
+-QStatusBar { background: #141824; border-top: 1px solid #2A2F3A; color: #E8EAF0; }
+-QFrame#plotQuickbar { background: rgba(20,24,36,0.80); border: 1px solid #2A2F3A; border-radius: 14px; }
+-QToolButton[qb="1"] { border: 1px solid #3A4253; border-radius: 12px; padding: 0px; background: #1A2030; color: #E8EAF0; }
+-QToolButton[qb="1"]:hover { background: #222A3D; }
+-QToolButton[qb="1"]:pressed { background: #2A3550; }
+-QToolButton[qb="1"]:checked { background: #2A3550; border: 1px solid #6C8DFF; }
+-QToolButton[qb="1"]:checked:hover { background: #324068; }
+-QToolButton[qb="1"]:disabled { background: #161B28; color: #7F889B; border-color: #2A2F3A; }
+-QFrame#controlsDock { border: 1px solid #2A2F3A; border-radius: 12px; background: #141824; }
+-QFrame#controlsHeader { background: #1D2230; border-bottom: 1px solid #2A2F3A; border-top-left-radius: 12px; border-top-right-radius: 12px; }
+-QToolButton#btnCtrlCollapse { border: 1px solid #2A2F3A; border-radius: 9px; padding: 6px 10px; background: #141824; color: #E8EAF0; font-weight: 800; text-align: left; }
+-QToolButton#btnCtrlCollapse:hover { background: #20273A; }
+-QToolButton#btnCtrlCollapse:pressed { background: #1B2131; }
+-QProgressBar { border: 1px solid #3A4253; border-radius: 6px; background: #1A2030; color: #E8EAF0; text-align: center; }
+-QProgressBar::chunk { background: #2ECC71; border-radius: 5px; }
+-QMenuBar { background: #0F1115; border-bottom: 1px solid #2A2F3A; padding: 2px; }
+-QMenuBar::item { padding: 6px 12px; border-radius: 6px; color: #E8EAF0; }
+-QMenuBar::item:selected { background: #1D2230; }
+-QMenuBar::item:pressed { background: #2A3550; }
+-QMenu { background: #141824; border: 1px solid #2A2F3A; border-radius: 8px; padding: 4px; }
+-QMenu::item { padding: 6px 28px 6px 12px; border-radius: 4px; color: #E8EAF0; }
+-QMenu::item:selected { background: #222A3D; }
+-QMenu::separator { height: 1px; background: #2A2F3A; margin: 4px 8px; }
+-"""
+-
+-
+-# Professional workspace UI overrides. Kept separate from the base theme so the
+-# application logic and existing widget-specific styling remain untouched.
+-LIGHT_QSS += """
+-QMainWindow { background: #F3F6FA; }
+-QWidget#appRoot { background: #F3F6FA; }
+-QFrame#ribbonBar { background: #FFFFFF; border: 1px solid #DCE3EC; border-radius: 8px; }
+-QFrame#controlRibbon { background: #FAFBFD; border: 1px solid #DCE3EC; border-radius: 8px; }
+-QFrame#controlRibbon QCheckBox { spacing: 5px; }
+-QFrame#controlRibbon QLabel[compactLabel="true"] { color: #5F6B7A; font-size: 10px; font-weight: 600; }
+-QFrame#controlRibbon QDoubleSpinBox, QFrame#controlRibbon QSpinBox, QFrame#controlRibbon QComboBox { min-height: 26px; padding: 2px 6px; }
+-QFrame#controlRibbon QPushButton { min-height: 27px; padding: 3px 8px; }
+-QFrame#ribbonGroup { background: transparent; border: none; border-right: 1px solid #E5EAF1; }
+-QFrame#ribbonGroup[lastGroup="true"] { border-right: none; }
+-QLabel[ribbonGroupTitle="true"] { color: #697386; font-size: 11px; font-weight: 600; padding-top: 1px; }
+-QToolButton[ribbon="1"] { border: 1px solid transparent; border-radius: 7px; padding: 5px 5px; background: transparent; color: #24344D; font-weight: 600; font-size: 11px; }
+-QToolButton#workspaceDetailsButton { border: 1px solid #D7E0EB; border-radius: 6px; padding: 4px 10px; background: #FFFFFF; color: #24344D; font-weight: 600; }
+-QToolButton#workspaceDetailsButton:hover { background: #F0F6FF; border-color: #AFCBEE; }
+-QToolButton[ribbon="1"]:hover { background: #F0F6FF; border-color: #CFE0FA; }
+-QToolButton[ribbon="1"]:pressed, QToolButton[ribbon="1"]:checked { background: #E6F1FF; border-color: #9CC4FF; color: #0E5EC7; }
+-QFrame#sidePanel, QFrame#workspacePanel { background: #FFFFFF; border: 1px solid #DCE3EC; border-radius: 8px; }
+-QFrame#workspaceTopBar { background: #FAFBFD; border: 1px solid #E2E7EE; border-radius: 7px; }
+-QFrame#summaryStrip { background: #FAFBFD; border: 1px solid #E2E7EE; border-radius: 7px; }
+-QLabel[summaryCaption="true"] { color: #778196; font-size: 11px; font-weight: 600; }
+-QLabel[summaryValue="true"] { color: #1D2C43; font-size: 11px; font-weight: 700; }
+-QFrame#summaryCell { border-right: 1px solid #E3E8EF; }
+-QFrame#controlsDock { border: 1px solid #DCE3EC; border-radius: 8px; background: #FFFFFF; }
+-QFrame#controlsHeader { background: #F7F9FC; border-bottom: 1px solid #E0E6EE; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+-QToolButton#btnCtrlCollapse { border: none; border-radius: 6px; padding: 7px 8px; background: transparent; font-weight: 700; color: #24344D; text-align: left; }
+-QToolButton#btnCtrlCollapse:hover { background: #EEF4FC; }
+-QPushButton, QToolButton { border-radius: 6px; }
+-QPushButton[primary="true"] { background: #1677FF; border-color: #1169E4; color: white; font-weight: 700; }
+-QPushButton[primary="true"]:hover { background: #0F6FEF; }
+-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { border-radius: 6px; min-height: 24px; }
+-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid #5B9DFF; }
+-QTreeWidget { border-radius: 6px; }
+-QTreeWidget::item { padding: 4px 3px; }
+-QTreeWidget::item:selected { background: #DDEBFF; color: #173B70; }
+-QTabWidget::pane { border-radius: 7px; }
+-QTabBar::tab { border-radius: 6px; padding: 7px 12px; background: transparent; margin: 1px; }
+-QTabBar::tab:selected { background: #FFFFFF; color: #145FBA; border: 1px solid #CBDDF5; font-weight: 700; }
+-QSplitter::handle { background: transparent; }
+-QSplitter::handle:hover { background: #D8E6F8; }
+-QFrame#plotQuickbar { background: rgba(255,255,255,0.92); border: 1px solid #D8E0EA; border-radius: 9px; }
+-QToolButton[qb="1"] { border-radius: 7px; }
+-QStatusBar { background: #FFFFFF; border-top: 1px solid #DCE3EC; color: #44546B; }
+-QStatusBar QLabel { padding: 0 9px; color: #44546B; }
+-QScrollBar:vertical { width: 10px; background: transparent; margin: 2px; }
+-QScrollBar::handle:vertical { background: #C6CEDA; border-radius: 4px; min-height: 28px; }
+-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+-QScrollBar:horizontal { height: 10px; background: transparent; margin: 2px; }
+-QScrollBar::handle:horizontal { background: #C6CEDA; border-radius: 4px; min-width: 28px; }
+-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+-"""
+-
+-DARK_QSS += """
+-QMainWindow { background: #0C111B; }
+-QWidget#appRoot { background: #0C111B; }
+-QFrame#ribbonBar { background: #151C28; border: 1px solid #283446; border-radius: 8px; }
+-QFrame#controlRibbon { background: #151E2C; border: 1px solid #283446; border-radius: 8px; }
+-QFrame#controlRibbon QCheckBox { spacing: 5px; }
+-QFrame#controlRibbon QLabel[compactLabel="true"] { color: #99A6B8; font-size: 10px; font-weight: 600; }
+-QFrame#controlRibbon QDoubleSpinBox, QFrame#controlRibbon QSpinBox, QFrame#controlRibbon QComboBox { min-height: 26px; padding: 2px 6px; }
+-QFrame#controlRibbon QPushButton { min-height: 27px; padding: 3px 8px; }
+-QFrame#ribbonGroup { background: transparent; border: none; border-right: 1px solid #2B3749; }
+-QFrame#ribbonGroup[lastGroup="true"] { border-right: none; }
+-QLabel[ribbonGroupTitle="true"] { color: #8D99AA; font-size: 11px; font-weight: 600; padding-top: 1px; }
+-QToolButton[ribbon="1"] { border: 1px solid transparent; border-radius: 7px; padding: 5px 5px; background: transparent; color: #E5EAF2; font-weight: 600; font-size: 11px; }
+-QToolButton#workspaceDetailsButton { border: 1px solid #334258; border-radius: 6px; padding: 4px 10px; background: #151E2C; color: #E5EAF2; font-weight: 600; }
+-QToolButton#workspaceDetailsButton:hover { background: #202B3B; border-color: #4C6484; }
+-QToolButton[ribbon="1"]:hover { background: #202B3B; border-color: #34445C; }
+-QToolButton[ribbon="1"]:pressed, QToolButton[ribbon="1"]:checked { background: #203B62; border-color: #477FC7; color: #D7E9FF; }
+-QFrame#sidePanel, QFrame#workspacePanel { background: #121925; border: 1px solid #283446; border-radius: 8px; }
+-QFrame#workspaceTopBar { background: #151E2C; border: 1px solid #293649; border-radius: 7px; }
+-QFrame#summaryStrip { background: #151E2C; border: 1px solid #293649; border-radius: 7px; }
+-QLabel[summaryCaption="true"] { color: #8995A8; font-size: 11px; font-weight: 600; }
+-QLabel[summaryValue="true"] { color: #E6ECF5; font-size: 11px; font-weight: 700; }
+-QFrame#summaryCell { border-right: 1px solid #2C394D; }
+-QFrame#controlsDock { border: 1px solid #283446; border-radius: 8px; background: #121925; }
+-QFrame#controlsHeader { background: #151E2C; border-bottom: 1px solid #293649; border-top-left-radius: 8px; border-top-right-radius: 8px; }
+-QToolButton#btnCtrlCollapse { border: none; border-radius: 6px; padding: 7px 8px; background: transparent; font-weight: 700; color: #E6ECF5; text-align: left; }
+-QToolButton#btnCtrlCollapse:hover { background: #202B3B; }
+-QPushButton, QToolButton { border-radius: 6px; }
+-QPushButton[primary="true"] { background: #287DDF; border-color: #246FC5; color: white; font-weight: 700; }
+-QPushButton[primary="true"]:hover { background: #3288E9; }
+-QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox { border-radius: 6px; min-height: 24px; }
+-QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus { border: 1px solid #4D8FD8; }
+-QTreeWidget { border-radius: 6px; }
+-QTreeWidget::item { padding: 4px 3px; }
+-QTreeWidget::item:selected { background: #213A5D; color: #E9F3FF; }
+-QTabWidget::pane { border-radius: 7px; }
+-QTabBar::tab { border-radius: 6px; padding: 7px 12px; background: transparent; margin: 1px; }
+-QTabBar::tab:selected { background: #182232; color: #A8CFFF; border: 1px solid #35557D; font-weight: 700; }
+-QSplitter::handle { background: transparent; }
+-QSplitter::handle:hover { background: #25364D; }
+-QFrame#plotQuickbar { background: rgba(18,25,37,0.94); border: 1px solid #2C394D; border-radius: 9px; }
+-QToolButton[qb="1"] { border-radius: 7px; }
+-QStatusBar { background: #121925; border-top: 1px solid #283446; color: #AAB4C4; }
+-QStatusBar QLabel { padding: 0 9px; color: #AAB4C4; }
+-QScrollBar:vertical { width: 10px; background: transparent; margin: 2px; }
+-QScrollBar::handle:vertical { background: #465268; border-radius: 4px; min-height: 28px; }
+-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
+-QScrollBar:horizontal { height: 10px; background: transparent; margin: 2px; }
+-QScrollBar::handle:horizontal { background: #465268; border-radius: 4px; min-width: 28px; }
+-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0px; }
+-"""
++LIGHT_QSS = build_qss("light")
++DARK_QSS = build_qss("dark")
+ 
+ 
+ # ===================================================================
+ # Helper functions
+ # ===================================================================
+ 
+-
+-LIGHT_QSS += """
+-QDialog { background: #F3F6FA; }
+-QToolTip { color: #FFFFFF; background: #203248; border: none; padding: 7px; }
+-QPushButton[primary="true"] { background: #087F8C; border-color: #087280; }
+-QPushButton[primary="true"]:hover { background: #076C77; }
+-QPushButton:disabled, QToolButton:disabled { color: #8D98A5; background: #EEF2F6; border-color: #DAE0E7; }
+-QPushButton:focus, QToolButton:focus { border: 1px solid #008B9B; }
+-QTreeWidget { alternate-background-color: #F5F8FB; }
+-QProgressBar::chunk { background: #087F8C; }
+-QLabel#selection_label { color: #53677E; }
+-QFrame#valveCard { background: #F7FAFD; border: 1px solid #DCE3EC; border-radius: 8px; }
+-QFrame#valveCard[issue="true"] { background: #FFF7EC; border-color: #F0C58A; }
+-QLabel[valveCardTitle="true"] { color: #5F6B7A; font-size: 11px; font-weight: 600; }
+-QLabel[valveCardValue="true"] { color: #10243E; font-size: 20px; font-weight: 700; }
+-QLabel[valveCardDetail="true"], QLabel[valveHint="true"] { color: #53677E; }
+-QFrame#valveNotice { background: #FFF7EC; border: 1px solid #F0C58A; border-radius: 6px; }
+-QFrame#valveNotice QLabel { color: #6B4A12; }
+-"""
+-DARK_QSS += """
+-QDialog { background: #121925; }
+-QToolTip { color: #FFFFFF; background: #24374D; border: 1px solid #3F536C; padding: 7px; }
+-QPushButton[primary="true"] { background: #147C89; border-color: #258F9C; }
+-QPushButton[primary="true"]:hover { background: #1B8D99; }
+-QPushButton:disabled, QToolButton:disabled { color: #6D7D92; background: #192332; border-color: #29374B; }
+-QPushButton:focus, QToolButton:focus { border: 1px solid #70D3DC; }
+-QTreeWidget { alternate-background-color: #192333; }
+-QProgressBar::chunk { background: #259DA8; }
+-QFrame#valveCard { background: #151E2C; border: 1px solid #293649; border-radius: 8px; }
+-QFrame#valveCard[issue="true"] { background: #2B2415; border-color: #7A5A22; }
+-QLabel[valveCardTitle="true"] { color: #99A6B8; font-size: 11px; font-weight: 600; }
+-QLabel[valveCardValue="true"] { color: #E6ECF5; font-size: 20px; font-weight: 700; }
+-QLabel[valveCardDetail="true"], QLabel[valveHint="true"] { color: #99A6B8; }
+-QFrame#valveNotice { background: #2B2415; border: 1px solid #7A5A22; border-radius: 6px; }
+-QFrame#valveNotice QLabel { color: #F2D9A6; }
+-"""
+-
+ def _to_epoch_seconds(t: Any) -> float:
+     """Convert various time representations to epoch seconds (UTC)."""
+     if t is None:
+@@ -1084,14 +854,14 @@
+ 
+ 
+ def apply_plotwidget_theme(pw: PlotWidget, bg_rgb: Tuple[int, int, int]) -> None:
+-    fg = _bg_to_fg_rgb(bg_rgb)
++    line, text = axis_colors(bg_rgb)
+     pw.setBackground(bg_rgb)
+     item = pw.getPlotItem()
+     for ax_name in ("left", "bottom", "right"):
+         axis = item.getAxis(ax_name)
+         if axis is not None:
+-            axis.setPen(pg.mkPen(fg))
+-            axis.setTextPen(pg.mkPen(fg))
++            axis.setPen(pg.mkPen(line))
++            axis.setTextPen(pg.mkPen(text))
+ 
+ 
+ def linear_detrend_safe(y: np.ndarray) -> np.ndarray:
+@@ -2020,15 +1790,13 @@
+         is_dark = fg == (255, 255, 255)
+         if is_dark:
+             self._info.setStyleSheet(
+-                "padding: 4px 8px; font-weight: 700; color: #F2F4F8;"
+-                "background: rgba(0,0,0,0.55); border: 1px solid rgba(255,255,255,0.18);"
+-                "border-radius: 9px;"
++                "padding: 2px 8px; font-weight: 600; color: #DCE1E6;"
++                "background: #1B1F24; border: 1px solid #3A4149; border-radius: 3px;"
+             )
+         else:
+             self._info.setStyleSheet(
+-                "padding: 4px 8px; font-weight: 700; color: #222;"
+-                "background: rgba(255,255,255,0.85); border: 1px solid #D7DBE0;"
+-                "border-radius: 9px;"
++                "padding: 2px 8px; font-weight: 600; color: #1E2730;"
++                "background: #FFFFFF; border: 1px solid #C3CAD2; border-radius: 3px;"
+             )
+ 
+     def _legend_text_rgb(self) -> Tuple[int, int, int]:
+@@ -2100,10 +1868,10 @@
+         if axis is None:
+             return
+ 
+-        fg = _bg_to_fg_rgb(self._bg_rgb)
++        line, text = axis_colors(self._bg_rgb)
+         try:
+-            axis.setPen(pg.mkPen(fg))
+-            axis.setTextPen(pg.mkPen(fg))
++            axis.setPen(pg.mkPen(line))
++            axis.setTextPen(pg.mkPen(text))
+         except Exception:
+             pass
+ 
+@@ -3286,14 +3054,14 @@
+             self.canvas.setBackground(bg_rgb)
+         except Exception:
+             pass
+-        fg = _bg_to_fg_rgb(bg_rgb)
++        line, text = axis_colors(bg_rgb)
+         for p in self._plots:
+             try:
+                 for ax in ("left", "bottom"):
+                     axis = p.getAxis(ax)
+                     if axis is not None:
+-                        axis.setPen(pg.mkPen(fg))
+-                        axis.setTextPen(pg.mkPen(fg))
++                        axis.setPen(pg.mkPen(line))
++                        axis.setTextPen(pg.mkPen(text))
+             except Exception:
+                 pass
+ 
+@@ -3380,8 +3148,8 @@
+                 pi.getAxis(name).setStyle(maxTickLevel=0)
+             for ax in ("left", "bottom"):
+                 try:
+-                    pi.getAxis(ax).setPen(pg.mkPen(fg))
+-                    pi.getAxis(ax).setTextPen(pg.mkPen(fg))
++                    pi.getAxis(ax).setPen(pg.mkPen(axis_colors(self._bg_rgb)[0]))
++                    pi.getAxis(ax).setTextPen(pg.mkPen(axis_colors(self._bg_rgb)[1]))
+                 except Exception:
+                     pass
+             if first_plot is None:
+@@ -3529,7 +3297,7 @@
+             self._theme = "light"
+ 
+         self._theme_guard = False
+-        self._theme_default_bg: Dict[str, Tuple[int, int, int]] = {"dark": (0, 0, 0), "light": (255, 255, 255)}
++        self._theme_default_bg: Dict[str, Tuple[int, int, int]] = dict(PLOT_BACKGROUND)
+ 
+         self.files: Dict[str, FileState] = {}
+         self.file_counter = 0
+@@ -3708,11 +3476,11 @@
+             if app is not None:
+                 from PyQt6.QtGui import QPalette
+                 palette = QPalette()
+-                colors = {"Window":"#121925", "WindowText":"#E6ECF5", "Base":"#101624", "AlternateBase":"#192333", "Text":"#E6ECF5", "Button":"#1A2030", "ButtonText":"#E6ECF5", "Highlight":"#24596B", "HighlightedText":"#FFFFFF", "ToolTipBase":"#203044", "ToolTipText":"#FFFFFF"} if theme == "dark" else {"Window":"#F3F6FA", "WindowText":"#203248", "Base":"#FFFFFF", "AlternateBase":"#F5F8FB", "Text":"#203248", "Button":"#FFFFFF", "ButtonText":"#203248", "Highlight":"#D8EEEF", "HighlightedText":"#153D4C", "ToolTipBase":"#203248", "ToolTipText":"#FFFFFF"}
++                colors = qt_palette_colors(theme)
+                 for role, color in colors.items():
+                     palette.setColor(getattr(QPalette.ColorRole, role), QColor(color))
+                 app.setPalette(palette)
+-                app.setStyleSheet((DARK_QSS if self._theme == "dark" else LIGHT_QSS) + presentation_qss(self._theme))
++                app.setStyleSheet(DARK_QSS if self._theme == "dark" else LIGHT_QSS)
+             for button in self.findChildren(QToolButton):
+                 filename = button.property("icon_file")
+                 if filename:
+@@ -4883,7 +4651,7 @@
+         self.btn_theme_fft.setText(self._theme_button_text())
+         self.btn_theme_fft.setToolTip("Tema Değiştir (Koyu/Açık)")
+         self.btn_theme_fft.setFixedSize(34, 34)
+-        self.btn_theme_fft.setStyleSheet("border-radius: 17px; font-weight: 900; padding: 0px;")
++        self.btn_theme_fft.setStyleSheet("padding: 0px;")
+         fft_topbar.addWidget(self.btn_theme_fft)
+         fft_layout.addLayout(fft_topbar)
+ 
+@@ -5384,8 +5152,8 @@
+         r, g, b = rgb
+         fr, fg_, fb = _bg_to_fg_rgb(rgb)
+         self.btn_bg_pick.setStyleSheet(
+-            f"background-color: rgb({r},{g},{b}); color: rgb({fr},{fg_},{fb}); font-weight: 800;"
+-            f"border-radius: 9px; padding: 7px 12px;"
++            f"background-color: rgb({r},{g},{b}); color: rgb({fr},{fg_},{fb}); font-weight: 600;"
++            f"border: 1px solid #9AA4AF; border-radius: 3px; padding: 4px 12px;"
+         )
+ 
+     def pick_background_color(self) -> None:
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/tdms_steady_ui.py 2.8.1/tdms_steady_ui.py
+--- 2.8.0/tdms_steady_ui.py	2026-10-19 07:41:40.516059290 +0000
++++ 2.8.1/tdms_steady_ui.py	2026-10-19 07:41:40.528059394 +0000
+@@ -253,11 +253,11 @@
+         if not hasattr(self, 'steady_canvas'):
+             return
+         dark = self._theme == 'dark'
+-        self.steady_canvas.setBackground('#101624' if dark else '#ffffff')
++        self.steady_canvas.setBackground('#181c21' if dark else '#ffffff')
+         for plot in self.steady_plots:
+             for key in ('left', 'bottom'):
+-                plot.getAxis(key).setPen('#54667e' if dark else '#b7c3d3')
+-                plot.getAxis(key).setTextPen('#d5e0ee' if dark else '#203248')
++                plot.getAxis(key).setPen('#78828c' if dark else '#6e7882')
++                plot.getAxis(key).setTextPen('#d6dce2' if dark else '#262e36')
+ 
+     def _steady_refresh(self):
+         if not hasattr(self, 'steady_channels'):
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/tdms_theme.py 2.8.1/tdms_theme.py
+--- 2.8.0/tdms_theme.py	1970-01-01 00:00:00.000000000 +0000
++++ 2.8.1/tdms_theme.py	2026-10-19 07:41:40.528059394 +0000
+@@ -0,0 +1,264 @@
++"""Application look & feel: one palette per theme, one stylesheet.
++
++Only colours, spacing and borders live here. Object names and dynamic
++properties are the contract with the widgets; no behaviour depends on this
++module.
++"""
++from __future__ import annotations
++from pathlib import Path
++
++_ICON_ROOT = Path(__file__).resolve().parent / "icons"
++
++PALETTES = {
++    "light": dict(
++        window="#E8EBEF", chrome="#F4F5F7", surface="#FFFFFF", raised="#F7F8FA",
++        header="#EEF0F3", alt_row="#F6F8FA",
++        border="#C3CAD2", border_soft="#DADFE5", border_strong="#9AA4AF",
++        text="#1E2730", text_strong="#0F171F", muted="#5A6672", faint="#8A949E", disabled="#A3ACB5",
++        accent="#0A5BAA", accent_hover="#084C8F", accent_pressed="#073E75",
++        accent_soft="#E4EEF8", accent_soft_border="#A8C5E6", accent_text="#0A4F94",
++        selection="#CFE1F5", selection_text="#0B2A4A",
++        focus="#2F7CD0", input="#FFFFFF", hover="#ECEFF3", pressed="#E0E5EB",
++        tooltip_bg="#1F2A36", tooltip_text="#F4F7FA",
++        warn_bg="#FFF6E5", warn_border="#E7C27A", warn_text="#6A4705",
++        danger="#B3261E", danger_soft="#FCECEB",
++        scroll="#B9C1CA", scroll_hover="#9AA4AF",
++    ),
++    "dark": dict(
++        window="#16191D", chrome="#1D2126", surface="#22272D", raised="#272C33",
++        header="#2A3037", alt_row="#262B31",
++        border="#3A4149", border_soft="#30363D", border_strong="#525B65",
++        text="#DCE1E6", text_strong="#F2F4F6", muted="#99A3AD", faint="#76808A", disabled="#5F6872",
++        accent="#3D8FDB", accent_hover="#4C9AE2", accent_pressed="#2F7DC6",
++        accent_soft="#1F3348", accent_soft_border="#36638F", accent_text="#8EC1F2",
++        selection="#284866", selection_text="#FFFFFF",
++        focus="#5AA2E6", input="#1B1F24", hover="#2C3239", pressed="#343B43",
++        tooltip_bg="#0F1317", tooltip_text="#EEF1F4",
++        warn_bg="#33291A", warn_border="#7D6130", warn_text="#F0D9A8",
++        danger="#E26D64", danger_soft="#3A2321",
++        scroll="#47505A", scroll_hover="#5C6670",
++    ),
++}
++
++QT_PALETTE_ROLES = {
++    "Window": "window", "WindowText": "text", "Base": "input", "AlternateBase": "alt_row",
++    "Text": "text", "Button": "surface", "ButtonText": "text", "Highlight": "selection",
++    "HighlightedText": "selection_text", "ToolTipBase": "tooltip_bg", "ToolTipText": "tooltip_text",
++    "PlaceholderText": "faint", "Link": "accent",
++}
++
++# Plot surfaces of the analysis pages follow the main plot defaults.
++PLOT_BACKGROUND = {"light": (255, 255, 255), "dark": (24, 28, 33)}
++
++
++def palette(theme: str) -> dict:
++    return PALETTES["dark" if theme == "dark" else "light"]
++
++
++def qt_palette_colors(theme: str) -> dict:
++    p = palette(theme)
++    return {role: p[key] for role, key in QT_PALETTE_ROLES.items()}
++
++
++def axis_colors(bg_rgb) -> tuple:
++    """Axis line and tick-label colours: softened, but readable on *bg_rgb*."""
++    r, g, b = bg_rgb[:3]
++    if 0.2126 * r + 0.7152 * g + 0.0722 * b > 140:
++        return (110, 120, 130), (38, 46, 54)
++    return (120, 130, 140), (214, 220, 226)
++
++
++def build_qss(theme: str) -> str:
++    p = dict(palette(theme))
++    p["icons"] = (_ICON_ROOT / ("dark" if theme == "dark" else "light")).as_posix()
++    return _QSS.format(**p)
++
++
++# Order matters for equal specificity: generic widget rules first, named
++# panels and property-tagged widgets afterwards.
++_QSS = """
++/* ---------- Base ---------- */
++QMainWindow, QWidget#appRoot {{ background: {window}; }}
++QDialog {{ background: {chrome}; }}
++QLabel {{ color: {text}; background: transparent; }}
++QLabel:disabled {{ color: {disabled}; }}
++QLabel[muted="true"], QLabel#selection_label {{ color: {muted}; }}
++QToolTip {{ color: {tooltip_text}; background: {tooltip_bg}; border: 1px solid {border_strong}; padding: 5px 7px; }}
++
++/* ---------- Menus ---------- */
++QMenuBar {{ background: {chrome}; border-bottom: 1px solid {border_soft}; padding: 1px 4px; }}
++QMenuBar::item {{ padding: 4px 10px; border-radius: 3px; color: {text}; background: transparent; }}
++QMenuBar::item:selected {{ background: {hover}; }}
++QMenuBar::item:pressed {{ background: {accent_soft}; color: {accent_text}; }}
++QMenu {{ background: {surface}; border: 1px solid {border}; padding: 4px 0; }}
++QMenu::item {{ padding: 5px 28px 5px 24px; color: {text}; background: transparent; }}
++QMenu::item:selected {{ background: {accent_soft}; color: {text_strong}; }}
++QMenu::item:disabled {{ color: {disabled}; }}
++QMenu::separator {{ height: 1px; background: {border_soft}; margin: 4px 8px; }}
++QMenu::indicator {{ width: 13px; height: 13px; left: 6px; }}
++
++/* ---------- Buttons ---------- */
++QPushButton, QToolButton {{ border: 1px solid {border}; border-radius: 3px; padding: 4px 12px; background: {surface}; color: {text}; }}
++QPushButton {{ min-height: 20px; }}
++QPushButton:hover, QToolButton:hover {{ background: {hover}; border-color: {border_strong}; }}
++QPushButton:pressed, QToolButton:pressed {{ background: {pressed}; }}
++QPushButton:checked, QToolButton:checked {{ background: {accent_soft}; border-color: {accent_soft_border}; color: {accent_text}; }}
++QPushButton:focus, QToolButton:focus {{ border-color: {focus}; }}
++QPushButton:disabled, QToolButton:disabled {{ color: {disabled}; background: {raised}; border-color: {border_soft}; }}
++QPushButton[primary="true"] {{ background: {accent}; border: 1px solid {accent}; color: #FFFFFF; font-weight: 600; }}
++QPushButton[primary="true"]:hover {{ background: {accent_hover}; border-color: {accent_hover}; }}
++QPushButton[primary="true"]:pressed {{ background: {accent_pressed}; border-color: {accent_pressed}; }}
++QPushButton[primary="true"]:focus {{ border-color: {accent_pressed}; }}
++QPushButton[primary="true"]:disabled {{ background: {raised}; border-color: {border_soft}; color: {disabled}; }}
++QPushButton[danger="true"] {{ background: {surface}; border-color: {danger}; color: {danger}; font-weight: 600; }}
++QPushButton[danger="true"]:hover {{ background: {danger_soft}; }}
++QPushButton::menu-indicator {{ image: url("{icons}/chevron_down.svg"); width: 9px; height: 9px; subcontrol-position: right center; subcontrol-origin: padding; right: 4px; }}
++QToolButton[helpButton="true"] {{ background: transparent; border: 1px solid transparent; border-radius: 3px; padding: 3px; }}
++QToolButton[helpButton="true"]:hover {{ background: {hover}; border-color: {border_soft}; }}
++QToolButton[helpButton="true"]:checked {{ background: {accent_soft}; border-color: {accent_soft_border}; }}
++
++/* ---------- Inputs ---------- */
++QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QDateTimeEdit, QPlainTextEdit, QTextEdit {{ border: 1px solid {border}; border-radius: 3px; padding: 2px 6px; background: {input}; color: {text}; selection-background-color: {selection}; selection-color: {selection_text}; }}
++QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox {{ min-height: 20px; }}
++QLineEdit:hover, QComboBox:hover, QSpinBox:hover, QDoubleSpinBox:hover {{ border-color: {border_strong}; }}
++QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{ border: 1px solid {focus}; }}
++QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled {{ color: {disabled}; background: {raised}; border-color: {border_soft}; }}
++QLineEdit:read-only {{ background: {raised}; }}
++QComboBox {{ padding-right: 22px; }}
++QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: top right; width: 20px; border: none; background: transparent; }}
++QComboBox::down-arrow {{ image: url("{icons}/chevron_down.svg"); width: 10px; height: 10px; }}
++QComboBox QAbstractItemView {{ background: {surface}; border: 1px solid {border}; selection-background-color: {accent_soft}; selection-color: {text_strong}; outline: 0; padding: 2px; }}
++QSpinBox, QDoubleSpinBox {{ padding-right: 18px; }}
++QSpinBox::up-button, QDoubleSpinBox::up-button {{ subcontrol-origin: border; subcontrol-position: top right; width: 16px; border: none; border-left: 1px solid {border_soft}; background: transparent; }}
++QSpinBox::down-button, QDoubleSpinBox::down-button {{ subcontrol-origin: border; subcontrol-position: bottom right; width: 16px; border: none; border-left: 1px solid {border_soft}; background: transparent; }}
++QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover, QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{ background: {hover}; }}
++QSpinBox::up-arrow, QDoubleSpinBox::up-arrow {{ image: url("{icons}/chevron_up.svg"); width: 8px; height: 8px; }}
++QSpinBox::down-arrow, QDoubleSpinBox::down-arrow {{ image: url("{icons}/chevron_down.svg"); width: 8px; height: 8px; }}
++
++QCheckBox, QRadioButton {{ spacing: 6px; color: {text}; background: transparent; }}
++QCheckBox:disabled, QRadioButton:disabled {{ color: {disabled}; }}
++QCheckBox::indicator, QTreeView::indicator, QListView::indicator, QTableView::indicator {{ width: 13px; height: 13px; border: 1px solid {border_strong}; border-radius: 2px; background: {input}; }}
++QCheckBox::indicator:hover, QTreeView::indicator:hover, QListView::indicator:hover {{ border-color: {accent}; }}
++QCheckBox::indicator:checked, QTreeView::indicator:checked, QListView::indicator:checked, QTableView::indicator:checked {{ background: {accent}; border-color: {accent}; image: url("{icons}/check_white.svg"); }}
++QCheckBox::indicator:indeterminate, QTreeView::indicator:indeterminate, QListView::indicator:indeterminate {{ background: {accent}; border-color: {accent}; image: url("{icons}/dash_white.svg"); }}
++QCheckBox::indicator:disabled, QTreeView::indicator:disabled {{ background: {raised}; border-color: {border_soft}; }}
++QCheckBox::indicator:checked:disabled, QTreeView::indicator:checked:disabled {{ background: {border_strong}; border-color: {border_strong}; }}
++QRadioButton::indicator {{ width: 13px; height: 13px; border: 1px solid {border_strong}; border-radius: 7px; background: {input}; }}
++QRadioButton::indicator:hover {{ border-color: {accent}; }}
++QRadioButton::indicator:checked {{ border: 1px solid {accent}; background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0 {accent}, stop:0.45 {accent}, stop:0.55 {input}, stop:1 {input}); }}
++
++/* ---------- Trees, tables, headers ---------- */
++QTreeView, QTreeWidget, QTableView, QTableWidget, QListView, QListWidget {{ border: 1px solid {border_soft}; border-radius: 0; background: {input}; alternate-background-color: {alt_row}; selection-background-color: {selection}; selection-color: {selection_text}; outline: 0; }}
++QTreeView::item, QListView::item {{ padding: 3px 4px; border: none; }}
++QTreeView::item:hover, QListView::item:hover {{ background: {hover}; }}
++QTreeView::item:selected, QListView::item:selected, QTableView::item:selected {{ background: {selection}; color: {selection_text}; }}
++QTreeView::branch {{ background: transparent; }}
++QTreeView::branch:selected {{ background: {selection}; }}
++QTreeView::branch:has-children:!has-siblings:closed, QTreeView::branch:closed:has-children:has-siblings {{ image: url("{icons}/chevron_right.svg"); }}
++QTreeView::branch:open:has-children:!has-siblings, QTreeView::branch:open:has-children:has-siblings {{ image: url("{icons}/chevron_down.svg"); }}
++QTableView {{ gridline-color: {border_soft}; }}
++QHeaderView {{ background: {header}; border: none; }}
++QHeaderView::section {{ background: {header}; color: {muted}; font-weight: 600; padding: 5px 6px; border: none; border-right: 1px solid {border_soft}; border-bottom: 1px solid {border}; }}
++QHeaderView::section:hover {{ color: {text}; }}
++QHeaderView::section:last {{ border-right: none; }}
++QTableCornerButton::section {{ background: {header}; border: none; border-bottom: 1px solid {border}; }}
++
++/* ---------- Status, progress, splitters, scrollbars ---------- */
++QStatusBar {{ background: {chrome}; border-top: 1px solid {border_soft}; color: {muted}; }}
++QStatusBar::item {{ border: none; }}
++QStatusBar QLabel {{ padding: 0 10px; color: {muted}; border-left: 1px solid {border_soft}; }}
++QProgressBar {{ border: 1px solid {border}; border-radius: 3px; background: {raised}; color: {text}; text-align: center; min-height: 14px; }}
++QProgressBar::chunk {{ background: {accent}; border-radius: 2px; }}
++QScrollArea {{ background: transparent; }}
++QScrollArea > QWidget#qt_scrollarea_viewport {{ background: transparent; }}
++QSplitter::handle {{ background: transparent; }}
++QSplitter::handle:hover {{ background: {accent_soft_border}; }}
++QMainWindow::separator {{ background: {border_soft}; width: 4px; height: 4px; }}
++QMainWindow::separator:hover {{ background: {accent_soft_border}; }}
++QScrollBar:vertical {{ width: 10px; background: transparent; margin: 0; }}
++QScrollBar::handle:vertical {{ background: {scroll}; border-radius: 3px; min-height: 28px; margin: 2px; }}
++QScrollBar:horizontal {{ height: 10px; background: transparent; margin: 0; }}
++QScrollBar::handle:horizontal {{ background: {scroll}; border-radius: 3px; min-width: 28px; margin: 2px; }}
++QScrollBar::handle:hover {{ background: {scroll_hover}; }}
++QScrollBar::add-line, QScrollBar::sub-line {{ width: 0; height: 0; border: none; background: transparent; }}
++QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
++
++/* ---------- Tabs ---------- */
++QTabWidget::pane {{ border: 1px solid {border_soft}; background: {surface}; top: -1px; }}
++QTabBar::tab {{ color: {muted}; background: transparent; border: 1px solid transparent; border-bottom: 2px solid transparent; padding: 5px 12px; margin: 0; }}
++QTabBar::tab:hover {{ color: {text}; background: {hover}; }}
++QTabBar::tab:selected {{ color: {text_strong}; background: {surface}; border-color: {border_soft}; border-bottom: 2px solid {accent}; }}
++QTabBar::tab:disabled {{ color: {disabled}; }}
++QTabBar::close-button {{ image: url("{icons}/close.svg"); subcontrol-position: right; border-radius: 2px; margin: 2px; }}
++QTabBar::close-button:hover {{ background: {pressed}; }}
++QTabBar QToolButton {{ background: {chrome}; border: 1px solid {border_soft}; border-radius: 0; padding: 0; width: 18px; }}
++QTabWidget#workspaceTabs::pane {{ border: none; border-top: 1px solid {border_soft}; background: {surface}; top: 0; }}
++QTabBar#workspaceTabBar::tab {{ color: {muted}; background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 8px 10px 7px 10px; margin: 0; font-weight: 400; }}
++QTabBar#workspaceTabBar::tab:hover {{ color: {text}; background: {hover}; }}
++QTabBar#workspaceTabBar::tab:selected {{ color: {text_strong}; background: transparent; border-bottom: 2px solid {accent}; font-weight: 600; }}
++QToolButton#workspaceDetailsButton {{ border: 1px solid {border}; border-radius: 3px; padding: 3px 10px; margin: 3px 4px; background: {surface}; color: {text}; font-weight: 400; }}
++QToolButton#workspaceDetailsButton:hover {{ background: {hover}; }}
++
++/* ---------- Command ribbon ---------- */
++QFrame#ribbonBar {{ background: {surface}; border: 1px solid {border_soft}; border-radius: 4px; }}
++QFrame#ribbonGroup {{ background: transparent; border: none; border-right: 1px solid {border_soft}; }}
++QFrame#ribbonGroup[lastGroup="true"] {{ border-right: none; }}
++QLabel[ribbonGroupTitle="true"] {{ color: {muted}; font-size: 10px; font-weight: 400; padding: 1px 0 0 0; }}
++QToolButton[ribbon="1"] {{ border: 1px solid transparent; border-radius: 3px; padding: 4px 2px 3px 2px; background: transparent; color: {text}; font-size: 11px; font-weight: 400; }}
++QToolButton[ribbon="1"]:hover {{ background: {hover}; border-color: {border_soft}; }}
++QToolButton[ribbon="1"]:pressed {{ background: {pressed}; }}
++QToolButton[ribbon="1"]:focus {{ border-color: {accent_soft_border}; }}
++QToolButton[ribbon="1"]:checked {{ background: {accent_soft}; border-color: {accent_soft_border}; color: {accent_text}; }}
++QToolButton[ribbon="1"]:disabled {{ background: transparent; border-color: transparent; color: {disabled}; }}
++QToolButton[ribbon="1"]::menu-indicator {{ image: url("{icons}/chevron_down.svg"); width: 7px; height: 7px; subcontrol-origin: padding; subcontrol-position: bottom right; right: 4px; bottom: 4px; }}
++QFrame#controlRibbon {{ background: {raised}; border: 1px solid {border_soft}; border-radius: 4px; }}
++QFrame#controlRibbon QCheckBox {{ spacing: 5px; }}
++QFrame#controlRibbon QLabel[compactLabel="true"] {{ color: {muted}; font-size: 10px; font-weight: 500; }}
++QFrame#controlRibbon QDoubleSpinBox, QFrame#controlRibbon QSpinBox, QFrame#controlRibbon QComboBox {{ min-height: 22px; padding: 1px 6px; }}
++QFrame#controlRibbon QPushButton {{ min-height: 22px; padding: 2px 8px; }}
++
++/* ---------- Panels ---------- */
++QFrame#sidePanel, QFrame#workspacePanel {{ background: {surface}; border: 1px solid {border_soft}; border-radius: 4px; }}
++QFrame#workspaceTopBar {{ background: {raised}; border: 1px solid {border_soft}; border-radius: 3px; }}
++QGroupBox {{ background: {surface}; border: 1px solid {border_soft}; border-radius: 4px; margin-top: 16px; padding: 10px 8px 8px 8px; }}
++QGroupBox::title {{ subcontrol-origin: margin; subcontrol-position: top left; left: 8px; padding: 0 4px; color: {muted}; font-weight: 600; }}
++QFrame#summaryStrip {{ background: {raised}; border: 1px solid {border_soft}; border-radius: 3px; }}
++QFrame#summaryCell {{ border: none; border-right: 1px solid {border_soft}; }}
++QLabel[summaryCaption="true"] {{ color: {faint}; font-size: 10px; font-weight: 500; }}
++QLabel[summaryValue="true"] {{ color: {text_strong}; font-size: 12px; font-weight: 600; }}
++QFrame#controlsDock {{ background: {surface}; border: 1px solid {border_soft}; border-radius: 4px; }}
++QFrame#controlsHeader {{ background: {header}; border: none; border-bottom: 1px solid {border_soft}; border-top-left-radius: 4px; border-top-right-radius: 4px; }}
++QFrame#controlsHeader QToolButton {{ border: 1px solid transparent; background: transparent; padding: 2px; }}
++QFrame#controlsHeader QToolButton:hover {{ background: {hover}; border-color: {border_soft}; }}
++QToolButton#btnCtrlCollapse {{ border: none; border-radius: 3px; padding: 4px 6px; background: transparent; color: {text_strong}; font-weight: 600; text-align: left; }}
++QToolButton#btnCtrlCollapse:hover {{ background: {hover}; }}
++QFrame#plotQuickbar {{ background: {surface}; border: 1px solid {border_soft}; border-radius: 4px; }}
++QToolButton[qb="1"] {{ border: 1px solid {border}; border-radius: 3px; padding: 0px; background: {surface}; }}
++QToolButton[qb="1"]:hover {{ background: {hover}; }}
++QToolButton[qb="1"]:pressed {{ background: {pressed}; }}
++QToolButton[qb="1"]:checked {{ background: {accent_soft}; border-color: {accent_soft_border}; }}
++QToolButton[qb="1"]:disabled {{ background: {raised}; border-color: {border_soft}; }}
++QDockWidget {{ color: {text_strong}; titlebar-close-icon: url("{icons}/close.svg"); titlebar-normal-icon: url("{icons}/detach.svg"); }}
++QDockWidget::title {{ background: {header}; border: 1px solid {border_soft}; padding: 5px 8px; text-align: left; }}
++QDockWidget::close-button, QDockWidget::float-button {{ border: none; background: transparent; padding: 1px; }}
++QDockWidget::close-button:hover, QDockWidget::float-button:hover {{ background: {hover}; }}
++
++/* ---------- Page chrome ---------- */
++QLabel[pageTitle="true"] {{ color: {text_strong}; font-size: 15px; font-weight: 600; padding: 0; }}
++QLabel[pageHelp="true"] {{ background: {raised}; color: {muted}; border: 1px solid {border_soft}; border-left: 3px solid {accent}; padding: 8px 12px; }}
++QFrame#legacyOffsets {{ background: {warn_bg}; border: 1px solid {warn_border}; border-radius: 3px; }}
++QFrame#legacyOffsets QLabel {{ color: {warn_text}; }}
++QFrame#plotEmptyState {{ background: {surface}; border: none; }}
++QLabel#emptyTitle {{ color: {text_strong}; font-size: 18px; font-weight: 600; }}
++QLabel#emptySubtitle {{ color: {muted}; font-size: 12px; }}
++QLabel#emptyMark {{ color: {accent}; }}
++
++/* ---------- Analysis cards ---------- */
++QFrame#valveCard {{ background: {raised}; border: 1px solid {border_soft}; border-left: 3px solid {accent}; border-radius: 3px; }}
++QFrame#valveCard[issue="true"] {{ background: {warn_bg}; border-color: {warn_border}; border-left: 3px solid {warn_border}; }}
++QLabel[valveCardTitle="true"] {{ color: {muted}; font-size: 11px; font-weight: 600; }}
++QLabel[valveCardValue="true"] {{ color: {text_strong}; font-size: 19px; font-weight: 600; }}
++QLabel[valveCardDetail="true"], QLabel[valveHint="true"] {{ color: {muted}; }}
++QFrame#valveNotice {{ background: {warn_bg}; border: 1px solid {warn_border}; border-radius: 3px; }}
++QFrame#valveNotice QLabel {{ color: {warn_text}; }}
++"""
+diff -ruN '--exclude=__pycache__' '--exclude=.pytest_cache' '--exclude=*.png' '--exclude=*.tdms' 2.8.0/tdms_valve_ui.py 2.8.1/tdms_valve_ui.py
+--- 2.8.0/tdms_valve_ui.py	2026-10-19 07:41:40.516059290 +0000
++++ 2.8.1/tdms_valve_ui.py	2026-10-19 07:41:40.528059394 +0000
+@@ -204,13 +204,13 @@
+     def _valve_theme(self):
+         if not hasattr(self,'valve_canvas'): return
+         dark=self._theme=='dark'
+-        self.valve_canvas.setBackground('#101624' if dark else '#ffffff')
++        self.valve_canvas.setBackground('#181c21' if dark else '#ffffff')
+         for line in self._valve_lines:
+-            line.label.setColor('#d5e0ee' if dark else '#203248')
++            line.label.setColor('#d6dce2' if dark else '#262e36')
+         for plot in self.valve_plots+getattr(self,'_valve_logic_plots',[]):
+             for key in ('left','bottom'):
+-                plot.getAxis(key).setPen('#b6c5d5' if dark else '#526475')
+-                plot.getAxis(key).setTextPen('#d5e0ee' if dark else '#203248')
++                plot.getAxis(key).setPen('#78828c' if dark else '#6e7882')
++                plot.getAxis(key).setTextPen('#d6dce2' if dark else '#262e36')
+ 
+     def _valve_set_review_enabled(self,enabled):
+         for widget in (self.valve_a,self.valve_b,self.valve_restore,self.valve_review_note,self.valve_reject): widget.setEnabled(enabled)
